@@ -238,7 +238,20 @@ fun MineScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .clickable {
+                    val devUrl = "https://github.com/power690"
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(devUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_developer"), devUrl))
+                        Toast.makeText(context, devUrl, Toast.LENGTH_LONG).show()
+                    }
+                },
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
