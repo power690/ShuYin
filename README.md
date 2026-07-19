@@ -47,7 +47,18 @@
 
 ## 📱 截图
 
-（待补充）
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><img src="screenshots/home.jpg" width="240"/><br/>首页推荐</td>
+      <td align="center"><img src="screenshots/player.jpg" width="240"/><br/>播放页</td>
+    </tr>
+    <tr>
+      <td align="center"><img src="screenshots/lyrics.jpg" width="240"/><br/>歌词页</td>
+      <td align="center"><img src="screenshots/profile.jpg" width="240"/><br/>我的</td>
+    </tr>
+  </table>
+</div>
 
 ## 🛠️ 技术栈
 
@@ -220,7 +231,18 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 
 ## 📱 Screenshots
 
-(To be added)
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><img src="screenshots/home.jpg" width="240"/><br/>Home</td>
+      <td align="center"><img src="screenshots/player.jpg" width="240"/><br/>Player</td>
+    </tr>
+    <tr>
+      <td align="center"><img src="screenshots/lyrics.jpg" width="240"/><br/>Lyrics</td>
+      <td align="center"><img src="screenshots/profile.jpg" width="240"/><br/>Profile</td>
+    </tr>
+  </table>
+</div>
 
 ## 🛠️ Tech Stack
 
