@@ -371,7 +371,20 @@ fun MineScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .clickable {
+                    val releaseUrl = "https://github.com/power690/ShuYin/releases"
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    try {
+                        context.startActivity(intent)
+                    } catch (_: Exception) {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_version"), releaseUrl))
+                        Toast.makeText(context, releaseUrl, Toast.LENGTH_LONG).show()
+                    }
+                },
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
