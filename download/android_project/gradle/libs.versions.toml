@@ -18,6 +18,7 @@ room = "2.7.1"
 # Apache 2.0 协议，闭源 APP 友好
 # 注意：AAR 自带 4 个 ABI 的 libflacJNI.so，不依赖系统 codec
 hehangFlacExtension = "1.3.1"
+okhttp = "4.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,6 +48,7 @@ androidx-room-compiler = { group = "androidx.room", name = "room-compiler", vers
 # 提供 native libFLAC 解码（FLAC 官方参考实现），不依赖系统 MediaCodec
 # 魔改 ROM 也能播 FLAC，支持 Android 5.0+ (API 21+)
 hehang-flac-extension = { group = "com.github.HeHang0", name = "exoplayer-extension-flac", version.ref = "hehangFlacExtension" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

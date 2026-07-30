@@ -62,6 +62,7 @@ import com.xiaowei.player.ui.screens.EmptyScanScreen
 import com.xiaowei.player.ui.screens.FavoriteScreen
 import com.xiaowei.player.ui.screens.LibraryScreen
 import com.xiaowei.player.ui.screens.LoadingScreen
+import com.xiaowei.player.ui.screens.LyricSynthScreen
 import com.xiaowei.player.ui.screens.MineScreen
 import com.xiaowei.player.ui.screens.NoPermissionScreen
 import com.xiaowei.player.ui.screens.PlayerScreen
@@ -87,6 +88,7 @@ sealed class Detail {
     object Search : Detail()
     object Favorite : Detail()
     object Settings : Detail()
+    object LyricSynth : Detail()
     object None : Detail()
 }
 
@@ -352,7 +354,8 @@ fun ShuYinApp(
                                 }
                                 Tab.Mine -> MineScreen(
                                     onOpenFavorite = { requestDetail(Detail.Favorite) },
-                                    onOpenSettings = { requestDetail(Detail.Settings) }
+                                    onOpenSettings = { requestDetail(Detail.Settings) },
+                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) }
                                 )
                             }
                         }
@@ -470,7 +473,11 @@ fun ShuYinApp(
                                 )
                                 Detail.Settings -> SettingsScreen(
                                     onBack = { popDetail() },
-                                    onCustomPathConfirm = onCustomPathConfirm
+                                    onCustomPathConfirm = onCustomPathConfirm,
+                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) }
+                                )
+                                Detail.LyricSynth -> LyricSynthScreen(
+                                    onBack = { popDetail() }
                                 )
                                 Detail.None -> {  }
                             }

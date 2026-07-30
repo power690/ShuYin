@@ -74,7 +74,8 @@ private fun mineCardColor(): Color {
 @Composable
 fun MineScreen(
     onOpenFavorite: () -> Unit = {},
-    onOpenSettings: () -> Unit = {}
+    onOpenSettings: () -> Unit = {},
+    onOpenLyricSynth: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
