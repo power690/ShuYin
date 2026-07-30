@@ -6,8 +6,8 @@ import android.app.NotificationManager
 import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
+import coil.disk.DiskCache
 import coil.memory.MemoryCache
-import java.io.File
 import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.PlaybackPrefs
@@ -33,7 +33,6 @@ class ShuYinApp : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
-        cleanupLegacyCoverCache()
 
         database = AppDatabase.get(this)
         favoriteRepo = FavoriteRepository(database)
@@ -52,20 +51,14 @@ class ShuYinApp : Application(), ImageLoaderFactory {
                 .maxSizePercent(0.25)
                 .build()
         }
+        .diskCache {
+            DiskCache.Builder()
+                .directory(cacheDir.resolve("coil_cache"))
+                .maxSizeBytes(100L * 1024 * 1024)
+                .build()
+        }
         .respectCacheHeaders(false)
         .build()
-
-    private fun cleanupLegacyCoverCache() {
-        try {
-            listOf("embedded_covers", "coil_cache", "image_cache").forEach { dir ->
-                val legacy = File(cacheDir, dir)
-                if (legacy.exists()) {
-                    legacy.deleteRecursively()
-                }
-            }
-        } catch (_: Throwable) {
-        }
-    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
