@@ -45,12 +45,6 @@ object LyricWriter {
     fun writeLyrics(file: File, content: LyricsContent): WriteResult {
         if (content.lrc.isBlank()) return WriteResult.NO_LYRIC
         return try {
-            
-            val bak = File(file.parentFile, file.name + ".bak")
-            if (!bak.exists()) {
-                file.copyTo(bak, overwrite = false)
-            }
-
             when (file.extension.lowercase()) {
                 "flac" -> FlacWriter.writeLyrics(file, content)
                 "mp3" -> Id3Writer.writeLyrics(file, content)
