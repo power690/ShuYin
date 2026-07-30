@@ -25,7 +25,10 @@ object UpdateChecker {
                 .connectTimeout(10, TimeUnit.SECONDS)
                 .readTimeout(15, TimeUnit.SECONDS)
                 .build()
-            val request = Request.Builder().url(UPDATE_URL).build()
+            val request = Request.Builder()
+                .url(UPDATE_URL)
+                .header("Cache-Control", "no-cache")
+                .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
                 val body = response.body?.string() ?: return null
