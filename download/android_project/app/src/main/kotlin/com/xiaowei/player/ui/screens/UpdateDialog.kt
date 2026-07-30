@@ -46,6 +46,7 @@ import com.xiaowei.player.BuildConfig
 import com.xiaowei.player.data.UpdateChecker
 import com.xiaowei.player.i18n.Strings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -86,6 +87,9 @@ fun UpdateCheckerHost(
     var showCheckingToast by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            cleanupInstalledApks(context)
+        }
         val info = withContext(Dispatchers.IO) {
             UpdateChecker.check(BuildConfig.VERSION_CODE)
         }
@@ -136,8 +140,16 @@ fun UpdateDialog(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    var downloadState by remember { mutableStateOf<DownloadState>(DownloadState.Idle) }
-    var downloadedFile by remember { mutableStateOf<File?>(null) }
+    val expectedFileName = expectedApkName(updateInfo.versionName)
+    val existingFile = remember(updateInfo.versionName) { findExistingApk(context, expectedFileName) }
+
+    var downloadState by remember {
+        mutableStateOf<DownloadState>(
+            if (existingFile != null) DownloadState.Done else DownloadState.Idle
+        )
+    }
+    var downloadedFile by remember { mutableStateOf(existingFile) }
+    var downloadJob by remember { mutableStateOf<Job?>(null) }
 
     Dialog(
         onDismissRequest = {
@@ -214,9 +226,14 @@ fun UpdateDialog(
                 ) {
                     TextButton(
                         onClick = {
-                            if (dl !is DownloadState.Downloading) onDismiss()
-                        },
-                        enabled = dl !is DownloadState.Downloading
+                            if (downloadState is DownloadState.Downloading) {
+                                downloadJob?.cancel()
+                                downloadJob = null
+                                downloadState = DownloadState.Idle
+                            } else {
+                                onDismiss()
+                            }
+                        }
                     ) {
                         Text(
                             text = Strings.get("update_cancel"),
@@ -230,7 +247,8 @@ fun UpdateDialog(
                             if (file != null && file.exists() && downloadState is DownloadState.Done) {
                                 installApk(context, file)
                             } else if (downloadState !is DownloadState.Downloading) {
-                                scope.launch {
+                                downloadJob?.cancel()
+                                val job = scope.launch {
                                     downloadState = DownloadState.Downloading(0f)
                                     val saved = downloadApk(
                                         context,
@@ -246,6 +264,7 @@ fun UpdateDialog(
                                         downloadState = DownloadState.Failed
                                     }
                                 }
+                                downloadJob = job
                             }
                         },
                         enabled = downloadState !is DownloadState.Downloading,
@@ -278,16 +297,42 @@ private sealed class DownloadState {
     object Failed : DownloadState()
 }
 
+private fun expectedApkName(versionName: String): String = "shuyin-$versionName.apk"
+
+private fun findExistingApk(context: Context, fileName: String): File? {
+    return try {
+        val f = File(updatesDir(context), fileName)
+        if (f.exists() && f.length() > 0) f else null
+    } catch (_: Exception) {
+        null
+    }
+}
+
 private fun updatesDir(context: Context): File {
     val dir = File(context.filesDir, "updates")
     if (!dir.exists()) dir.mkdirs()
     return dir
 }
 
-private fun cleanupOldApks(context: Context) {
+private fun cleanupOldApks(context: Context, keepFileName: String? = null) {
     try {
         updatesDir(context).listFiles()?.forEach { f ->
-            if (f.isFile && f.name.endsWith(".apk")) f.delete()
+            if (f.isFile && f.name.endsWith(".apk")) {
+                if (keepFileName == null || f.name != keepFileName) {
+                    f.delete()
+                }
+            }
+        }
+    } catch (_: Exception) {
+    }
+}
+
+private fun cleanupInstalledApks(context: Context) {
+    try {
+        updatesDir(context).listFiles()?.forEach { f ->
+            if (f.isFile && (f.name.endsWith(".apk") || f.name.endsWith(".tmp"))) {
+                f.delete()
+            }
         }
     } catch (_: Exception) {
     }
@@ -300,18 +345,22 @@ private suspend fun downloadApk(
     onProgress: (Float) -> Unit
 ): File? = withContext(Dispatchers.IO) {
     try {
-        cleanupOldApks(context)
+        val outFile = File(updatesDir(context), expectedApkName(versionName))
+        cleanupOldApks(context, keepFileName = outFile.name)
         val client = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .build()
-        val request = Request.Builder().url(url).build()
+        val request = Request.Builder()
+            .url(url)
+            .header("Cache-Control", "no-cache")
+            .build()
         client.newCall(request).execute().use { response ->
             if (!response.isSuccessful) return@withContext null
             val body = response.body ?: return@withContext null
             val total = body.contentLength()
-            val outFile = File(updatesDir(context), "shuyin-$versionName.apk")
             val tmp = File(outFile.parentFile, outFile.name + ".tmp")
+            if (tmp.exists()) tmp.delete()
             body.byteStream().use { input ->
                 java.io.FileOutputStream(tmp).use { output ->
                     val buf = ByteArray(8 * 1024)
@@ -324,6 +373,7 @@ private suspend fun downloadApk(
                     }
                 }
             }
+            if (outFile.exists()) outFile.delete()
             if (!tmp.renameTo(outFile)) return@withContext null
             outFile
         }
@@ -332,7 +382,31 @@ private suspend fun downloadApk(
     }
 }
 
+private fun canInstallApk(context: Context): Boolean {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        context.packageManager.canRequestPackageInstalls()
+    } else true
+}
+
 private fun installApk(context: Context, file: File) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !canInstallApk(context)) {
+        try {
+            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = Uri.parse("package:${context.packageName}")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+            }
+        }
+        return
+    }
     try {
         val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
         val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -343,18 +417,13 @@ private fun installApk(context: Context, file: File) {
         context.startActivity(intent)
     } catch (e: Exception) {
         try {
-            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
-                data = Uri.parse("package:${context.packageName}")
+            val uri = Uri.fromFile(file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
         } catch (_: Exception) {
         }
     }
-}
-
-fun canInstallApk(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.packageManager.canRequestPackageInstalls()
-    } else true
 }
