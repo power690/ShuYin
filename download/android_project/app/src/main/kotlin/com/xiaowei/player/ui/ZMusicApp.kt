@@ -436,6 +436,12 @@ fun ShuYinApp(
 
                                     shadowElevation = ENTER_SHADOW_MAX * (1f - enter)
                                 }
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+
+                                }
                         ) {
                             when (displayedDetail) {
                                 is Detail.Artist -> ArtistDetailScreen(
@@ -482,7 +488,14 @@ fun ShuYinApp(
                                 )
                                 Detail.Settings -> SettingsScreen(
                                     onBack = { popDetail() },
-                                    onCustomPathConfirm = onCustomPathConfirm
+                                    onCustomPathConfirm = onCustomPathConfirm,
+                                    onToggleMixWithOthers = { mix ->
+                                        try {
+                                            com.xiaowei.player.ShuYinApp.instance.playerManager
+                                                .updateAudioFocusHandling(mix)
+                                        } catch (_: Exception) {
+                                        }
+                                    }
                                 )
                                 Detail.LyricSynth -> LyricSynthScreen(
                                     onBack = { popDetail() }
