@@ -1,7 +1,7 @@
 {
   "versionCode": 5,
   "versionName": "1.3.1",
-  "downloadUrl": "https://github.com/power690/ShuYin/releases/download/v1.2.0/ShuYin-release-v1.2.0.apk",
+  "downloadUrl": "https://github.com/power690/ShuYin/releases/download/v1.3.0/ShuYin-release-1.3.0-unsigned.apk",
   "updateLog": {
     "en": "New features and improvements in this version:\n\n1. Added word-by-word lyrics synthesizer: automatically fetch and embed KRC word-by-word lyrics for your local music, supporting both FLAC and MP3 formats.\n2. Added 'Play alongside other apps' option in settings: when enabled, audio from other apps will no longer pause your music.\n3. Added in-app update checker: the app will automatically check for new versions on launch and notify you with a download dialog.\n4. Fixed a bug where MP3 files lost album cover, title, and artist after writing lyrics.\n5. Fixed a touch-through issue on secondary pages like the lyrics synthesizer.\n6. Fixed a crash when tapping the install button during update.\n7. Fixed the cancel button not actually interrupting downloads.\n8. Optimized album cover caching for smoother scrolling.\n9. Refined the blur transition animation when entering and exiting the full-screen player.\n10. Various stability and performance improvements.\n\nThank you for using ShuYin! Please update to enjoy the latest experience.",
     "zh": "本次更新内容如下：\n\n1. 新增逐字合成器功能：可为本地音乐自动获取并写入酷狗 KRC 逐字歌词，支持 FLAC 和 MP3 两种格式，让歌词随旋律逐字呈现。\n2. 设置中新增「与其他应用同时播放」开关：开启后，其他应用播放声音时不会暂停本应用的音乐，实现多应用并行播放。\n3. 新增应用内检测更新：软件启动时自动检查新版本，发现更新会弹出更新弹窗，支持下载进度显示和一键安装。\n4. 修复 MP3 写入逐字歌词后封面、标题、专辑、歌手信息丢失的 Bug。\n5. 修复逐字合成器等二级页面触摸穿透到底层页面的 Bug。\n6. 修复点击更新弹窗安装按钮时应用崩溃的问题。\n7. 修复下载更新时点击取消无法真正中断下载的问题。\n8. 优化专辑封面磁盘缓存机制，列表滑动更流畅。\n9. 优化全屏播放页进入退出的模糊过渡动画效果。\n10. 多项稳定性改进和性能优化。\n\n感谢您使用鼠音，请及时更新以获得最佳体验。",
