@@ -122,6 +122,7 @@ fun ShuYinApp(
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
 
     val enterProgress = remember { Animatable(0f) }
+    val playerEnterProgress = remember { Animatable(0f) }
 
     val supportsBlur = remember { supportsHardwareBlur }
 
@@ -166,6 +167,11 @@ fun ShuYinApp(
     val currentView = androidx.compose.ui.platform.LocalView.current
     LaunchedEffect(playerExpanded) {
         currentView.keepScreenOn = playerExpanded
+        if (playerExpanded) {
+            playerEnterProgress.animateTo(1f, stackSceneSpringSpec())
+        } else {
+            playerEnterProgress.animateTo(0f, stackSceneSpringSpec())
+        }
     }
 
     val context = androidx.compose.ui.platform.LocalContext.current
@@ -291,7 +297,9 @@ fun ShuYinApp(
                         modifier = Modifier
                             .fillMaxSize()
                             .graphicsLayer {
-                                val compression = enterProgress.value.coerceIn(0f, 1f)
+                                val detailP = enterProgress.value.coerceIn(0f, 1f)
+                                val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
+                                val compression = maxOf(detailP, playerP)
 
                                 val scale = COMPRESS_SCALE_MIN +
                                         (1f - COMPRESS_SCALE_MIN) * (1f - compression)
@@ -300,7 +308,8 @@ fun ShuYinApp(
 
                                 translationX = -compression * size.width * COMPRESS_TRANSLATE_FRACTION
 
-                                if (supportsBlur && enterProgress.isRunning && compression > 0f) {
+                                if (supportsBlur && compression > 0f &&
+                                    (enterProgress.isRunning || playerEnterProgress.isRunning)) {
                                     val blurSigma = compression * density * BLUR_MAX_DP
                                     renderEffect = BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
                                 }
