@@ -102,6 +102,7 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.hehang.flac.extension)
+    implementation(libs.okhttp)
 
     debugImplementation(libs.androidx.ui.tooling)
 }
