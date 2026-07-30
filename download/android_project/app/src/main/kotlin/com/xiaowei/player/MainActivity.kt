@@ -32,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.xiaowei.player.data.LyricsParser
+import com.xiaowei.player.data.UpdateChecker
 import com.xiaowei.player.player.DesktopLyricService
 import com.xiaowei.player.player.PlaybackService
 import com.xiaowei.player.ui.ShuYinApp
+import com.xiaowei.player.ui.screens.UpdateCheckerHost
 import com.xiaowei.player.ui.theme.ZMusicTheme
 import java.util.Locale
 
@@ -201,6 +203,11 @@ class MainActivity : ComponentActivity() {
                             floatingLyricEnabled = floatingLyricEnabled,
                             onToggleFloatingLyric = { toggleFloatingLyric() },
                             onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) }
+                        )
+
+                        UpdateCheckerHost(
+                            onCheckRequested = { },
+                            manualTrigger = null
                         )
                     }
                 }
