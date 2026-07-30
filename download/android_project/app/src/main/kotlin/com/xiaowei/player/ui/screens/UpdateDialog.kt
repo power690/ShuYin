@@ -150,6 +150,7 @@ fun UpdateDialog(
     }
     var downloadedFile by remember { mutableStateOf(existingFile) }
     var downloadJob by remember { mutableStateOf<Job?>(null) }
+    val httpCallRef = remember { java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>(null) }
 
     Dialog(
         onDismissRequest = {
@@ -227,6 +228,7 @@ fun UpdateDialog(
                     TextButton(
                         onClick = {
                             if (downloadState is DownloadState.Downloading) {
+                                httpCallRef.getAndSet(null)?.cancel()
                                 downloadJob?.cancel()
                                 downloadJob = null
                                 downloadState = DownloadState.Idle
@@ -253,10 +255,12 @@ fun UpdateDialog(
                                     val saved = downloadApk(
                                         context,
                                         updateInfo.downloadUrl,
-                                        updateInfo.versionName
+                                        updateInfo.versionName,
+                                        httpCallRef
                                     ) { p ->
                                         downloadState = DownloadState.Downloading(p)
                                     }
+                                    httpCallRef.set(null)
                                     if (saved != null) {
                                         downloadedFile = saved
                                         downloadState = DownloadState.Done
@@ -342,6 +346,7 @@ private suspend fun downloadApk(
     context: Context,
     url: String,
     versionName: String,
+    callRef: java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>,
     onProgress: (Float) -> Unit
 ): File? = withContext(Dispatchers.IO) {
     try {
@@ -355,7 +360,9 @@ private suspend fun downloadApk(
             .url(url)
             .header("Cache-Control", "no-cache")
             .build()
-        client.newCall(request).execute().use { response ->
+        val call = client.newCall(request)
+        callRef.set(call)
+        call.execute().use { response ->
             if (!response.isSuccessful) return@withContext null
             val body = response.body ?: return@withContext null
             val total = body.contentLength()
@@ -384,7 +391,11 @@ private suspend fun downloadApk(
 
 private fun canInstallApk(context: Context): Boolean {
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        context.packageManager.canRequestPackageInstalls()
+        try {
+            context.packageManager.canRequestPackageInstalls()
+        } catch (_: Exception) {
+            false
+        }
     } else true
 }
 
