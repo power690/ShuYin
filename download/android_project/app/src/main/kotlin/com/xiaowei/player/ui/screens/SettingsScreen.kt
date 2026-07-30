@@ -575,17 +575,7 @@ fun SettingsScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 6.dp)
                 .clickable {
-                    val releaseUrl = "https://github.com/power690/ShuYin/releases"
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(releaseUrl)).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_version"), releaseUrl))
-                        Toast.makeText(context, releaseUrl, Toast.LENGTH_LONG).show()
-                    }
+                    com.xiaowei.player.ui.screens.UpdateCheckerState.requestManualCheck()
                 },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
