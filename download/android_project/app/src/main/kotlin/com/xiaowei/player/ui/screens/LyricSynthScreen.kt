@@ -58,6 +58,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.xiaowei.player.LyricFacade
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.scanner.MusicScanner
+import com.xiaowei.player.ui.components.AlbumCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -418,28 +419,13 @@ private fun SynthRow(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        if (showCheck) {
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (isSelected) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isSelected) {
-                    Icon(
-                        Icons.Filled.Check,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-            Spacer(Modifier.width(12.dp))
-        }
+        AlbumCover(
+            coverUri = null,
+            modifier = Modifier.size(48.dp),
+            cornerRadius = 8,
+            filePath = mf.file.absolutePath
+        )
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = mf.metaTitle ?: mf.name,
@@ -459,12 +445,28 @@ private fun SynthRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = mf.ext.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        if (showCheck) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (isSelected) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isSelected) {
+                    Icon(
+                        Icons.Filled.Check,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(13.dp)
+                    )
+                }
+            }
+        }
     }
 }
 
