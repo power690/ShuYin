@@ -473,8 +473,7 @@ fun ShuYinApp(
                                 )
                                 Detail.Settings -> SettingsScreen(
                                     onBack = { popDetail() },
-                                    onCustomPathConfirm = onCustomPathConfirm,
-                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) }
+                                    onCustomPathConfirm = onCustomPathConfirm
                                 )
                                 Detail.LyricSynth -> LyricSynthScreen(
                                     onBack = { popDetail() }

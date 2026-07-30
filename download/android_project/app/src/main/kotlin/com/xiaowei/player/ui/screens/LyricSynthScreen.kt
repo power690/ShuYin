@@ -26,10 +26,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Deselect
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -82,7 +80,6 @@ fun LyricSynthScreen(onBack: () -> Unit) {
     var items by remember { mutableStateOf<List<SynthItem>>(emptyList()) }
     var scanning by remember { mutableStateOf(false) }
     var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var multiSelect by remember { mutableStateOf(false) }
     var synthProgress by remember { mutableStateOf<SynthProgress?>(null) }
 
     fun doScan(path: String) {
@@ -103,7 +100,6 @@ fun LyricSynthScreen(onBack: () -> Unit) {
             if (realPath != null) {
                 selectedPath = realPath
                 selectedIds = emptySet()
-                multiSelect = false
                 doScan(realPath)
             } else {
                 Toast.makeText(context, Strings.get("system_not_supported"), Toast.LENGTH_SHORT).show()
@@ -150,25 +146,14 @@ fun LyricSynthScreen(onBack: () -> Unit) {
             )
             if (items.isNotEmpty()) {
                 IconButton(onClick = {
-                    selectedIds = emptySet()
-                    multiSelect = !multiSelect
-                }) {
-                    Icon(
-                        if (multiSelect) Icons.Filled.Deselect else Icons.Outlined.Lyrics,
-                        contentDescription = Strings.get("lyric_synth_multi_select"),
-                        tint = if (multiSelect) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = {
-                    multiSelect = true
                     selectedIds = if (selectedIds.size == items.size) emptySet()
                     else items.map { it.filePath }.toSet()
                 }) {
                     Icon(
                         Icons.Filled.SelectAll,
                         contentDescription = Strings.get("lyric_synth_select_all"),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = if (selectedIds.size == items.size) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -190,15 +175,12 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                         SynthRow(
                             item = item,
                             isSelected = isSelected,
-                            showCheck = multiSelect,
+                            showCheck = true,
                             onClick = {
-                                if (multiSelect) {
-                                    selectedIds = if (isSelected) selectedIds - item.filePath
-                                    else selectedIds + item.filePath
-                                }
+                                selectedIds = if (isSelected) selectedIds - item.filePath
+                                else selectedIds + item.filePath
                             },
                             onLongClick = {
-                                if (!multiSelect) multiSelect = true
                                 if (!isSelected) selectedIds = selectedIds + item.filePath
                             }
                         )
@@ -208,7 +190,7 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                 val selectedCount by remember(selectedIds) {
                     derivedStateOf { selectedIds.size }
                 }
-                if (multiSelect && selectedCount > 0) {
+                if (selectedCount > 0) {
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -239,7 +221,6 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                                         Toast.LENGTH_SHORT
                                     ).show()
                                     selectedIds = emptySet()
-                                    multiSelect = false
                                     selectedPath?.let { p -> doScan(p) }
                                 }
                             },
@@ -366,8 +347,14 @@ private fun PickerCenter(pickFolder: () -> Unit) {
             NativePickerButton(onClick = pickFolder)
             Spacer(Modifier.height(16.dp))
             Text(
-                text = Strings.get("lyric_synth_pick_hint"),
+                text = Strings.get("lyric_synth_desc"),
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = Strings.get("lyric_synth_pick_hint"),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
