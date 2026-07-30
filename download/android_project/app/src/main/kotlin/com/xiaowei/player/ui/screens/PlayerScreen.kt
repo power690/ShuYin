@@ -153,7 +153,8 @@ fun PlayerScreen(
             val nextSong = playlist.getOrNull(playerState.currentIndex + 1)
             com.xiaowei.player.data.EmbeddedCoverFetcher.preloadPlayingCovers(
                 currentFilePath = song.data,
-                nextFilePath = nextSong?.data
+                nextFilePath = nextSong?.data,
+                context = context
             )
             lastPreloadedSongId = song.id
         }
@@ -878,26 +879,17 @@ private fun PlayerCover(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var currentBytes by remember(filePath) {
-        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedBytesSync(filePath))
+    var currentUri by remember(filePath) {
+        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedUriSync(filePath))
     }
 
-    if (currentBytes == null && !filePath.isNullOrBlank()) {
+    if (currentUri == null && !filePath.isNullOrBlank()) {
         LaunchedEffect(filePath) {
-            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(filePath)
+            val uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverUri(filePath, context)
             }
-            currentBytes = bytes
+            currentUri = uri
         }
-    }
-
-    val imageRequest = remember(currentBytes, filePath) {
-        if (currentBytes != null && !filePath.isNullOrBlank()) {
-            coil.request.ImageRequest.Builder(context)
-                .data(currentBytes)
-                .memoryCacheKey(filePath)
-                .build()
-        } else null
     }
 
     Box(
@@ -911,9 +903,9 @@ private fun PlayerCover(
         ),
         contentAlignment = Alignment.Center
     ) {
-        if (imageRequest != null) {
+        if (currentUri != null) {
             AsyncImage(
-                model = imageRequest,
+                model = currentUri,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

@@ -48,25 +48,25 @@ fun AlbumCover(
 ) {
     val context = LocalContext.current
 
-    var currentBytes by remember(filePath) {
-        mutableStateOf(EmbeddedCoverFetcher.getCachedBytesSync(filePath))
+    var currentUri by remember(filePath) {
+        mutableStateOf(EmbeddedCoverFetcher.getCachedUriSync(filePath))
     }
 
-    if (currentBytes == null && !filePath.isNullOrBlank()) {
+    if (currentUri == null && !filePath.isNullOrBlank()) {
         LaunchedEffect(filePath) {
-            val bytes = withContext(Dispatchers.IO) {
-                EmbeddedCoverFetcher.loadCoverBytes(filePath)
+            val uri = withContext(Dispatchers.IO) {
+                EmbeddedCoverFetcher.loadCoverUri(filePath, context)
             }
-            currentBytes = bytes
+            currentUri = uri
         }
     }
 
-    val imageRequest = remember(currentBytes, filePath) {
-        if (currentBytes != null && !filePath.isNullOrBlank()) {
+    val imageRequest = remember(currentUri) {
+        if (currentUri != null) {
             ImageRequest.Builder(context)
-                .data(currentBytes)
+                .data(currentUri)
                 .crossfade(false)
-                .memoryCacheKey(filePath)
+                .memoryCacheKey(currentUri.toString())
                 .build()
         } else null
     }
