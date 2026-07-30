@@ -29,12 +29,7 @@ import kotlinx.coroutines.launch
 class MusicPlayerManager(
     private val context: Context,
     private val playbackPrefs: PlaybackPrefs? = null,
-    /**
-     * 切歌时按需重读歌词的回调。
-     * - 仅在 Android 11+ 且已授予 MANAGE_EXTERNAL_STORAGE 时才会被调用。
-     * - Android 10 及以下不会触发，保持原有行为不变。
-     * - 返回 null 或空字符串表示仍读不到歌词。
-     */
+    
     private val lyricsLoader: (suspend (Song) -> String?)? = null
 ) {
 
@@ -42,41 +37,33 @@ class MusicPlayerManager(
 
     private var lyricsReloadJob: Job? = null
 
-    /**
-     * 切歌后按需重读歌词：
-     * - Android 10 (API 29) 及以下保持原有行为，不重读（库扫描时已读取，且无分区存储问题）。
-     * - 仅在 Android 11+ 且已授予「管理所有文件」权限时触发；
-     *   未授权时跳过，让用户先走「音频与音乐权限」读到的那批歌词，不打扰用户。
-     * - 已有歌词直接跳过，避免无谓 IO。
-     * - 延迟 200ms 让 ExoPlayer 先完成 prepare，避免与播放准备抢资源。
-     * - 重读期间若再次切歌，前一次任务会被取消。
-     */
+    
     private fun tryReloadLyricsIfNeeded(song: Song) {
-        // Android 10 以下保持原行为
+        
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
-        // 已有歌词，无需重读
+        
         if (song.hasLyrics) return
-        // 未授予「管理所有文件」权限，不重读（避免无谓 IO）
+        
         if (!android.os.Environment.isExternalStorageManager()) return
-        // 没有注入加载器，无法重读
+        
         val loader = lyricsLoader ?: return
 
         lyricsReloadJob?.cancel()
         lyricsReloadJob = scope.launch {
-            // 让播放器先缓冲几百毫秒
+            
             delay(200)
             val lyrics = try { loader(song) } catch (_: Exception) { null }
             if (lyrics.isNullOrBlank()) return@launch
-            // 校验当前仍在播放同一首歌
+            
             val current = _state.value.currentSong ?: return@launch
             if (current.id != song.id) return@launch
-            // 更新当前播放歌曲的歌词
+            
             _state.update { s ->
                 val cur = s.currentSong
                 if (cur?.id == song.id) s.copy(currentSong = cur.copy(lyrics = lyrics))
                 else s
             }
-            // 同时更新 playlist 中的歌曲，避免下次切回时再次重读
+            
             val idx = playlist.indexOfFirst { it.id == song.id }
             if (idx in playlist.indices) {
                 playlist = playlist.toMutableList().also { l ->
@@ -130,7 +117,7 @@ class MusicPlayerManager(
                         savePlaybackStateSnapshot(positionMs = player.currentPosition)
                     }
 
-                    // 自动切歌或队列内 seek 也触发歌词按需重读
+                    
                     playlist.getOrNull(idx)?.let { tryReloadLyricsIfNeeded(it) }
                 }
             })
@@ -184,7 +171,7 @@ class MusicPlayerManager(
             )
         }
         startTicker()
-        // 切歌后按需重读歌词（Android 11+ 且已授权管理所有文件权限时触发）
+        
         tryReloadLyricsIfNeeded(songs[startIndex])
     }
 
@@ -200,7 +187,7 @@ class MusicPlayerManager(
             )
         }
         startTicker()
-        // 切歌后按需重读歌词（Android 11+ 且已授权管理所有文件权限时触发）
+        
         tryReloadLyricsIfNeeded(playlist[index])
     }
 
@@ -314,7 +301,7 @@ class MusicPlayerManager(
                 currentIndex = index
             )
         }
-        // 切歌后按需重读歌词（Android 11+ 且已授权管理所有文件权限时触发）
+        
         tryReloadLyricsIfNeeded(playlist[index])
     }
 
