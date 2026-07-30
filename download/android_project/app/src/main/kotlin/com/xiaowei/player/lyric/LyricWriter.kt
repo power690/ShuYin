@@ -438,7 +438,7 @@ object LyricWriter {
                                 p += 10 + frameSize; continue
                             }
                         }
-                        preservedFrames.add(id3Bytes.copyOfRange(p, p + 10 + frameSize))
+                        preservedFrames.add(rebuildFrameV4(frameId, id3Bytes, p + 10, frameSize))
                         p += 10 + frameSize
                     }
                 }
@@ -525,6 +525,15 @@ object LyricWriter {
             while (valueEnd > p && b[valueEnd - 1] == 0.toByte()) valueEnd--
             val value = String(b, p, valueEnd - p, charset)
             return desc to value
+        }
+
+        private fun rebuildFrameV4(frameId: String, src: ByteArray, payloadOff: Int, payloadLen: Int): ByteArray {
+            val out = java.io.ByteArrayOutputStream()
+            out.write(frameId.toByteArray(Charsets.US_ASCII))
+            writeSynchsafe(out, payloadLen)
+            out.write(0); out.write(0)
+            out.write(src, payloadOff, payloadLen)
+            return out.toByteArray()
         }
 
         private fun buildTxxxFrame(description: String, value: String): ByteArray {
