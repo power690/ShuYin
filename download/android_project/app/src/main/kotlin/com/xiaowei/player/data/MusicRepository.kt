@@ -115,7 +115,7 @@ class MusicRepository(private val context: Context) {
                             val job = launch {
                                 coverSemaphore.withPermit {
                                     try {
-                                        EmbeddedCoverFetcher.loadCoverUri(data, context)
+                                        EmbeddedCoverFetcher.loadCoverBytes(data)
                                     } catch (_: Exception) {
 
                                     }
@@ -216,7 +216,7 @@ class MusicRepository(private val context: Context) {
                             val job = launch {
                                 coverSemaphore.withPermit {
                                     try {
-                                        EmbeddedCoverFetcher.loadCoverUri(filePath, context)
+                                        EmbeddedCoverFetcher.loadCoverBytes(filePath)
                                     } catch (_: Exception) {}
                                 }
                             }
