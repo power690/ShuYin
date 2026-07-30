@@ -13,6 +13,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.xiaowei.player.data.AudioMixPrefs
 import com.xiaowei.player.data.PlaybackPrefs
 import com.xiaowei.player.data.Song
 import kotlinx.coroutines.CoroutineScope
@@ -91,13 +92,15 @@ class MusicPlayerManager(
             .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_PREFER)
             .setEnableAudioTrackPlaybackParams(true)
 
+        val mediaAudioAttributes = AudioAttributes.Builder()
+            .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+            .setUsage(C.USAGE_MEDIA)
+            .build()
+
         ExoPlayer.Builder(context, renderersFactory)
             .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
-                    .setUsage(C.USAGE_MEDIA)
-                    .build(),
-                 true
+                mediaAudioAttributes,
+                !AudioMixPrefs.get(context).mixWithOthers
             )
             .setHandleAudioBecomingNoisy(true)
             .build().apply {
@@ -351,6 +354,17 @@ class MusicPlayerManager(
             }
         }
         _state.update { it.copy(playMode = mode) }
+    }
+
+    fun updateAudioFocusHandling(mixWithOthers: Boolean) {
+        try {
+            val attrs = AudioAttributes.Builder()
+                .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                .setUsage(C.USAGE_MEDIA)
+                .build()
+            player.setAudioAttributes(attrs, !mixWithOthers)
+        } catch (_: Exception) {
+        }
     }
 
     fun release() {
