@@ -58,13 +58,11 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { _ ->
-        // 通知权限处理完（无论授权与否），继续请求「管理所有文件」权限（Android 11+）
+        
         checkAndRequestManageStoragePermission()
     }
 
-    /**
-     * 记录上次 onResume 时的「管理所有文件」授权状态，用于检测用户从系统设置返回后是否新授权。
-     */
+    
     private var wasManageStorageGranted = false
 
     override fun attachBaseContext(newBase: Context) {
@@ -127,7 +125,7 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
         }
-        // 初始化「管理所有文件」授权状态记录
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wasManageStorageGranted = android.os.Environment.isExternalStorageManager()
         }
@@ -329,7 +327,7 @@ class MainActivity : ComponentActivity() {
             if (!granted) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                // 通知权限已授予，直接进入下一步请求「管理所有文件」权限
+                
                 checkAndRequestManageStoragePermission()
             }
         } else {
@@ -337,19 +335,15 @@ class MainActivity : ComponentActivity() {
             val enabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
             if (!enabled) {
                 openAppNotificationSettings()
-                // 退出设置页后通过 onResume 检测状态变化
+                
             } else {
-                // 通知已启用，直接进入下一步请求「管理所有文件」权限
+                
                 checkAndRequestManageStoragePermission()
             }
         }
     }
 
-    /**
-     * 请求「管理所有文件」权限（MANAGE_EXTERNAL_STORAGE）。
-     * - Android 11 (API 30) 及以上才请求；Android 10 及以下不请求，保持原有行为不变。
-     * - 已授权时跳过，不重复跳转。
-     */
+    
     private fun checkAndRequestManageStoragePermission() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
         if (android.os.Environment.isExternalStorageManager()) {
@@ -401,9 +395,9 @@ class MainActivity : ComponentActivity() {
                 floatingLyricEnabled = false
             }
         }
-        // 注意：这里不再自动重新扫描整个库（耗电且浪费时间）。
-        // 「管理所有文件」权限授权后，切歌时由 MusicPlayerManager.tryReloadLyricsIfNeeded()
-        // 按需只读取当前播放的那一首歌的歌词，无需重扫全库。
+        
+        
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wasManageStorageGranted = android.os.Environment.isExternalStorageManager()
         }

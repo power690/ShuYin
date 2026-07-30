@@ -294,15 +294,7 @@ class MusicRepository(private val context: Context) {
         }
     }
 
-    /**
-     * 切歌时按需重读歌词。
-     *
-     * 背景：Android 11+ 分区存储生效后，未授予 MANAGE_EXTERNAL_STORAGE 时，
-     * 用 File API 读不到拆分歌词文件（.lrc）；用户在主界面授权后，需要一次
-     * 重读机会把歌词补回来。
-     *
-     * 逻辑与 loadAllMusic 内的 readLyrics 完全一致，确保读到的歌词与扫描库时一致。
-     */
+    
     suspend fun reloadLyrics(song: Song): String? = withContext(Dispatchers.IO) {
         if (song.data.isBlank()) return@withContext null
         val mmr = MediaMetadataRetriever()
