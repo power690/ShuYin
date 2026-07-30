@@ -61,6 +61,7 @@ import com.xiaowei.player.scanner.MusicScanner
 import com.xiaowei.player.ui.components.AlbumCover
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -207,13 +208,20 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                                 scope.launch {
                                     synthProgress = SynthProgress(total = toProcess.size, done = 0)
                                     val total = toProcess.size
-                                    var done = 0
-                                    for (it in toProcess) {
-                                        withContext(Dispatchers.IO) {
-                                            try { LyricFacade.processFile(it.musicFile.file) } catch (_: Exception) {}
+                                    val doneCount = java.util.concurrent.atomic.AtomicInteger(0)
+                                    val semaphore = kotlinx.coroutines.sync.Semaphore(5)
+                                    kotlinx.coroutines.coroutineScope {
+                                        toProcess.forEach { item ->
+                                            launch {
+                                                semaphore.withPermit {
+                                                    withContext(Dispatchers.IO) {
+                                                        try { LyricFacade.processFile(item.musicFile.file) } catch (_: Exception) {}
+                                                    }
+                                                    val d = doneCount.incrementAndGet()
+                                                    synthProgress = SynthProgress(total = total, done = d)
+                                                }
+                                            }
                                         }
-                                        done++
-                                        synthProgress = SynthProgress(total = total, done = done)
                                     }
                                     synthProgress = null
                                     Toast.makeText(
