@@ -153,8 +153,7 @@ fun PlayerScreen(
             val nextSong = playlist.getOrNull(playerState.currentIndex + 1)
             com.xiaowei.player.data.EmbeddedCoverFetcher.preloadPlayingCovers(
                 currentFilePath = song.data,
-                nextFilePath = nextSong?.data,
-                context = context
+                nextFilePath = nextSong?.data
             )
             lastPreloadedSongId = song.id
         }
@@ -879,17 +878,26 @@ private fun PlayerCover(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var currentUri by remember(filePath) {
-        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedUriSync(filePath))
+    var currentBytes by remember(filePath) {
+        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedBytesSync(filePath))
     }
 
-    if (currentUri == null && !filePath.isNullOrBlank()) {
+    if (currentBytes == null && !filePath.isNullOrBlank()) {
         LaunchedEffect(filePath) {
-            val uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverUri(filePath, context)
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(filePath)
             }
-            currentUri = uri
+            currentBytes = bytes
         }
+    }
+
+    val imageRequest = remember(currentBytes, filePath) {
+        if (currentBytes != null && !filePath.isNullOrBlank()) {
+            coil.request.ImageRequest.Builder(context)
+                .data(currentBytes)
+                .memoryCacheKey(filePath)
+                .build()
+        } else null
     }
 
     Box(
@@ -903,9 +911,9 @@ private fun PlayerCover(
         ),
         contentAlignment = Alignment.Center
     ) {
-        if (currentUri != null) {
+        if (imageRequest != null) {
             AsyncImage(
-                model = currentUri,
+                model = imageRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
