@@ -1,7 +1,7 @@
 {
   "versionCode": 6,
   "versionName": "1.3.5",
-  "downloadUrl": "https://github.com/power690/ShuYin/releases/download/v1.3.3/ShuYin-release-1.3.3-unsigned.apk",
+  "downloadUrl": "https://github.com/power690/ShuYin/releases/download/v1.3.5/ShuYin-release-1.3.5.apk",
   "updateLog": {
     "en": "Fixed known bugs.\nOptimized for large-screen devices.",
     "zh": "修复已知 Bug。\n针对大屏设备优化。",
