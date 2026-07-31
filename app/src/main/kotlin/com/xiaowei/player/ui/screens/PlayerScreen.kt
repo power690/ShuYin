@@ -333,7 +333,7 @@ fun PlayerScreen(
                                 contentAlignment = Alignment.Center
                             ) {
 
-                                val coverSize = if (maxWidth < maxHeight) maxWidth else maxHeight * 0.82f
+                                val coverSize = (if (maxWidth < maxHeight) maxWidth else maxHeight * 0.82f).coerceAtMost(480.dp)
                                 Card(
                                     modifier = Modifier
                                         .size(coverSize)
