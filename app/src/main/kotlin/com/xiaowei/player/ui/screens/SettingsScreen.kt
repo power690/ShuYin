@@ -193,8 +193,6 @@ fun SettingsScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 96.dp)
     ) {
 
         Row(
@@ -217,6 +215,13 @@ fun SettingsScreen(
                 fontWeight = FontWeight.Bold
             )
         }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 96.dp)
+        ) {
 
         Card(
             modifier = Modifier
@@ -771,6 +776,7 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
         }
     }
 }
