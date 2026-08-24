@@ -73,18 +73,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.TextUnit
 import coil.compose.AsyncImage
 import com.xiaowei.player.data.LyricsParser
 import com.xiaowei.player.data.Song
@@ -97,6 +101,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.Density
@@ -741,7 +747,7 @@ private fun LyricsView(
                 vertical = viewportHeightDp / 2
             )
         ) {
-            items(lines.size) { i ->
+            items(lines.size, key = { it }) { i ->
                 val line = lines[i]
                 val isCurrent = i == currentIdx
                 val isBlank = line.text.isBlank()
@@ -751,48 +757,23 @@ private fun LyricsView(
                 val unsungColor = primaryColor.copy(alpha = 0.35f)
 
                 val lineLivePositionMs = if (isCurrent && line.isWordByWord && isPlaying) livePositionMs else positionMs
-
-                val displayText: AnnotatedString = if (isBlank) {
-                    AnnotatedString("♪")
-                } else {
-                    AnnotatedString(line.text)
-                }
-
                 val useKaraoke = isCurrent && line.isWordByWord && !isBlank
-
-                var shrinkStep by remember(line.timeMs, line.text, isCurrent) { mutableStateOf(0) }
                 val baseSize = if (isCurrent) 22f else 16f
-                val actualSize = (baseSize * (1f - shrinkStep * 0.12f)).coerceAtLeast(baseSize * 0.45f)
+                val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
+                val displayText = if (isBlank) "♪" else line.text
 
-                val karaokeBrush = if (useKaraoke && shrinkStep < 5) {
-                    remember(line, lineLivePositionMs, sungColor, unsungColor, lines) {
-                        buildKaraokeBrush(
-                            words = line.words,
-                            totalChars = line.text.length,
-                            nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L),
-                            positionMs = lineLivePositionMs,
-                            sungColor = sungColor,
-                            unsungColor = unsungColor
-                        )
-                    }
-                } else null
-
-                Text(
+                KaraokeLineAndroidView(
                     text = displayText,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = actualSize.sp,
-                        fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                        brush = karaokeBrush
-                    ),
-                    color = when {
-                        useKaraoke && karaokeBrush != null -> Color.Transparent
-                        useKaraoke -> primaryColor
-                        isCurrent -> primaryColor
-                        else -> dimColor
-                    },
+                    words = if (useKaraoke) line.words else null,
+                    positionMs = lineLivePositionMs,
+                    nextLineTimeMs = nextLineTimeMs,
+                    sungColor = sungColor,
+                    unsungColor = unsungColor,
+                    dimColor = if (isCurrent) primaryColor else dimColor,
+                    fontSize = baseSize,
+                    isBold = isCurrent,
                     modifier = Modifier
                         .fillMaxWidth()
-
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
@@ -800,75 +781,133 @@ private fun LyricsView(
                         .padding(
                             vertical = if (isBlank) 2.dp else 8.dp,
                             horizontal = 24.dp
-                        ),
-                    textAlign = TextAlign.Center,
-                    onTextLayout = { result ->
-                        if (result.lineCount > 1 && shrinkStep < 5) {
-                            shrinkStep++
-                        }
-                    }
+                        )
                 )
             }
         }
     }
 }
 
-private fun buildKaraokeBrush(
-    words: List<com.xiaowei.player.data.LyricWord>,
-    totalChars: Int,
-    nextLineTimeMs: Long,
+@Composable
+private fun KaraokeLineAndroidView(
+    text: String,
+    words: List<com.xiaowei.player.data.LyricWord>?,
     positionMs: Long,
+    nextLineTimeMs: Long,
     sungColor: Color,
-    unsungColor: Color
-): Brush {
-    val safeTotal = totalChars.coerceAtLeast(1)
-    val stops = mutableListOf<Pair<Float, Color>>()
-    var avgSpan = 300L
-    if (words.size >= 2) {
-        var totalSpan = 0L
-        for (i in 0 until words.size - 1) {
-            totalSpan += words[i + 1].timeMs - words[i].timeMs
+    unsungColor: Color,
+    dimColor: Color,
+    fontSize: Float,
+    isBold: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val textMeasurer = rememberTextMeasurer()
+    val baseStyle = TextStyle(
+        fontSize = fontSize.sp,
+        fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+        textAlign = TextAlign.Center
+    )
+    val annotatedText = remember(text) { AnnotatedString(text) }
+    val layoutResult = remember(text, fontSize, isBold) {
+        textMeasurer.measure(
+            text = annotatedText,
+            style = baseStyle,
+            overflow = TextOverflow.Visible,
+            softWrap = true,
+            constraints = Constraints(maxWidth = Constraints.Infinity)
+        )
+    }
+    val density = LocalDensity.current
+    val layoutWidthPx = layoutResult.size.width
+    val layoutHeightPx = layoutResult.size.height.coerceAtLeast(1)
+    val layoutHeightDp = with(density) { layoutHeightPx.toDp() }
+
+    Canvas(
+        modifier = modifier.height(layoutHeightDp)
+    ) {
+        val centerOffsetX = ((size.width - layoutWidthPx) / 2f).coerceAtLeast(0f)
+
+        if (words == null || words.isEmpty()) {
+            drawText(
+                textLayoutResult = layoutResult,
+                color = dimColor,
+                topLeft = Offset(centerOffsetX, 0f)
+            )
+            return@Canvas
         }
-        avgSpan = (totalSpan / (words.size - 1)).coerceIn(80L, 800L)
-    }
-    val lastWordEndTime = words.last().timeMs + avgSpan
-    var charOffset = 0
-    for (i in words.indices) {
-        val w = words[i]
-        val startFrac = charOffset.toFloat() / safeTotal
-        charOffset += w.text.length
-        val endFrac = charOffset.toFloat() / safeTotal
-        val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
-        val span = (endTime - w.timeMs).coerceAtLeast(1L)
-        when {
-            positionMs >= endTime -> {
-                stops.add(startFrac to sungColor)
-                stops.add(endFrac to sungColor)
+
+        var avgSpan = 300L
+        if (words.size >= 2) {
+            var totalSpan = 0L
+            for (i in 0 until words.size - 1) {
+                totalSpan += words[i + 1].timeMs - words[i].timeMs
             }
-            positionMs < w.timeMs -> {
-                stops.add(startFrac to unsungColor)
-                stops.add(endFrac to unsungColor)
+            avgSpan = (totalSpan / (words.size - 1)).coerceIn(80L, 800L)
+        }
+        val lastWordEndTime = words.last().timeMs + avgSpan
+
+        var charOffset = 0
+        for (i in words.indices) {
+            val w = words[i]
+            val startChar = charOffset.coerceAtMost(text.length)
+            val endChar = (charOffset + w.text.length).coerceAtMost(text.length)
+            charOffset = endChar
+
+            val startPx = if (startChar < text.length) {
+                layoutResult.getHorizontalPosition(startChar, true)
+            } else layoutWidthPx.toFloat()
+            val endPx = if (endChar >= text.length) {
+                layoutWidthPx.toFloat()
+            } else {
+                layoutResult.getHorizontalPosition(endChar, true)
             }
-            else -> {
-                val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
-                val midFrac = startFrac + (endFrac - startFrac) * progress
-                stops.add(startFrac to sungColor)
-                stops.add(midFrac to sungColor)
-                stops.add(midFrac to unsungColor)
-                stops.add(endFrac to unsungColor)
+            val wordWidth = (endPx - startPx).coerceAtLeast(0f)
+            val wordLeft = centerOffsetX + startPx
+            val wordRight = wordLeft + wordWidth
+
+            val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
+            val span = (endTime - w.timeMs).coerceAtLeast(1L)
+
+            when {
+                positionMs >= endTime -> {
+                    clipRect(wordLeft, 0f, wordRight, size.height) {
+                        drawText(
+                            textLayoutResult = layoutResult,
+                            color = sungColor,
+                            topLeft = Offset(centerOffsetX, 0f)
+                        )
+                    }
+                }
+                positionMs < w.timeMs -> {
+                    clipRect(wordLeft, 0f, wordRight, size.height) {
+                        drawText(
+                            textLayoutResult = layoutResult,
+                            color = unsungColor,
+                            topLeft = Offset(centerOffsetX, 0f)
+                        )
+                    }
+                }
+                else -> {
+                    val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
+                    val splitX = wordLeft + wordWidth * progress
+                    clipRect(wordLeft, 0f, splitX, size.height) {
+                        drawText(
+                            textLayoutResult = layoutResult,
+                            color = sungColor,
+                            topLeft = Offset(centerOffsetX, 0f)
+                        )
+                    }
+                    clipRect(splitX, 0f, wordRight, size.height) {
+                        drawText(
+                            textLayoutResult = layoutResult,
+                            color = unsungColor,
+                            topLeft = Offset(centerOffsetX, 0f)
+                        )
+                    }
+                }
             }
         }
     }
-    if (stops.isEmpty()) {
-        return Brush.horizontalGradient(colors = listOf(unsungColor, unsungColor))
-    }
-    if (stops.first().first > 0f) {
-        stops.add(0, 0f to stops.first().second)
-    }
-    if (stops.last().first < 1f) {
-        stops.add(1f to stops.last().second)
-    }
-    return Brush.horizontalGradient(colorStops = stops.toTypedArray())
 }
 
 @Composable
