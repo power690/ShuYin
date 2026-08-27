@@ -46,6 +46,8 @@ class MainActivity : ComponentActivity() {
 
     private var floatingLyricEnabled by mutableStateOf(false)
 
+    private var isSystemDarkTheme by mutableStateOf(false)
+
     private var cachedLyrics: List<DesktopLyricService.FloatingLyricLine> = emptyList()
     private var cachedLyricSongId: Long = -1L
 
@@ -104,6 +106,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        isSystemDarkTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
         com.xiaowei.player.data.LocalePrefs.get(this).languageCode?.let {
             com.xiaowei.player.i18n.Strings.setCurrentLanguage(it)
         }
@@ -134,7 +138,7 @@ class MainActivity : ComponentActivity() {
         checkPermissionAndLoad()
 
         setContent {
-            ZMusicTheme {
+            ZMusicTheme(darkTheme = isSystemDarkTheme) {
                 val state by viewModel.library.collectAsState()
                 val playerState by viewModel.playerManager.state.collectAsState()
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -381,6 +385,11 @@ class MainActivity : ComponentActivity() {
                 startActivity(intent)
             } catch (_: Exception) {}
         }
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        isSystemDarkTheme = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
     }
 
     override fun onStop() {

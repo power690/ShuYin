@@ -13,8 +13,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 7
-        versionName = "1.3.6"
+        versionCode = 8
+        versionName = "1.3.7"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -27,6 +27,7 @@ android {
         debug {
             isMinifyEnabled = false
             isDebuggable = true
+            applicationIdSuffix = ".debug"
         }
         release {
 

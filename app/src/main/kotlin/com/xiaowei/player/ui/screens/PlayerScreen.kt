@@ -61,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -86,6 +87,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnit
@@ -134,7 +136,7 @@ fun PlayerScreen(
     floatingLyricEnabled: Boolean = false,
     onToggleFloatingLyric: () -> Unit = {}
 ) {
-    var showLyrics by remember { mutableStateOf(false) }
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
     var showPlaylist by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -758,7 +760,7 @@ private fun LyricsView(
 
                 val lineLivePositionMs = if (isCurrent && line.isWordByWord && isPlaying) livePositionMs else positionMs
                 val useKaraoke = isCurrent && line.isWordByWord && !isBlank
-                val baseSize = if (isCurrent) 22f else 16f
+                val baseSize = if (isCurrent) 21f else 16f
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
 
@@ -801,108 +803,163 @@ private fun KaraokeLineAndroidView(
     isBold: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val textMeasurer = rememberTextMeasurer()
-    val baseStyle = TextStyle(
-        fontSize = fontSize.sp,
-        fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-        textAlign = TextAlign.Center
-    )
-    val annotatedText = remember(text) { AnnotatedString(text) }
-    val layoutResult = remember(text, fontSize, isBold) {
-        textMeasurer.measure(
-            text = annotatedText,
-            style = baseStyle,
-            overflow = TextOverflow.Visible,
-            softWrap = true,
-            constraints = Constraints(maxWidth = Constraints.Infinity)
+    BoxWithConstraints(modifier) {
+        val density = LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val textMeasurer = rememberTextMeasurer()
+        val baseStyle = TextStyle(
+            fontSize = fontSize.sp,
+            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+            textAlign = TextAlign.Center
         )
-    }
-    val density = LocalDensity.current
-    val layoutWidthPx = layoutResult.size.width
-    val layoutHeightPx = layoutResult.size.height.coerceAtLeast(1)
-    val layoutHeightDp = with(density) { layoutHeightPx.toDp() }
-
-    Canvas(
-        modifier = modifier.height(layoutHeightDp)
-    ) {
-        val centerOffsetX = ((size.width - layoutWidthPx) / 2f).coerceAtLeast(0f)
-
-        if (words == null || words.isEmpty()) {
-            drawText(
-                textLayoutResult = layoutResult,
-                color = dimColor,
-                topLeft = Offset(centerOffsetX, 0f)
+        val annotatedText = remember(text) { AnnotatedString(text) }
+        val layoutResult = remember(text, fontSize, isBold, maxWidthPx) {
+            textMeasurer.measure(
+                text = annotatedText,
+                style = baseStyle,
+                overflow = TextOverflow.Visible,
+                softWrap = true,
+                constraints = Constraints(maxWidth = maxWidthPx)
             )
-            return@Canvas
         }
+        val layoutWidthPx = layoutResult.size.width
+        val layoutHeightPx = layoutResult.size.height.coerceAtLeast(1)
+        val layoutHeightDp = with(density) { layoutHeightPx.toDp() }
 
-        var avgSpan = 300L
-        if (words.size >= 2) {
-            var totalSpan = 0L
-            for (i in 0 until words.size - 1) {
-                totalSpan += words[i + 1].timeMs - words[i].timeMs
+        Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(layoutHeightDp)
+        ) {
+            val centerOffsetX = ((size.width - layoutWidthPx) / 2f).coerceAtLeast(0f)
+
+            if (words == null || words.isEmpty()) {
+                drawText(
+                    textLayoutResult = layoutResult,
+                    color = dimColor,
+                    topLeft = Offset(centerOffsetX, 0f)
+                )
+                return@Canvas
             }
-            avgSpan = (totalSpan / (words.size - 1)).coerceIn(80L, 800L)
-        }
-        val lastWordEndTime = words.last().timeMs + avgSpan
 
-        var charOffset = 0
-        for (i in words.indices) {
-            val w = words[i]
-            val startChar = charOffset.coerceAtMost(text.length)
-            val endChar = (charOffset + w.text.length).coerceAtMost(text.length)
-            charOffset = endChar
-
-            val startPx = if (startChar < text.length) {
-                layoutResult.getHorizontalPosition(startChar, true)
-            } else layoutWidthPx.toFloat()
-            val endPx = if (endChar >= text.length) {
-                layoutWidthPx.toFloat()
-            } else {
-                layoutResult.getHorizontalPosition(endChar, true)
+            var avgSpan = 300L
+            if (words.size >= 2) {
+                var totalSpan = 0L
+                for (i in 0 until words.size - 1) {
+                    totalSpan += words[i + 1].timeMs - words[i].timeMs
+                }
+                avgSpan = (totalSpan / (words.size - 1)).coerceIn(80L, 800L)
             }
-            val wordWidth = (endPx - startPx).coerceAtLeast(0f)
-            val wordLeft = centerOffsetX + startPx
-            val wordRight = wordLeft + wordWidth
+            val lastWordEndTime = words.last().timeMs + avgSpan
 
-            val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
-            val span = (endTime - w.timeMs).coerceAtLeast(1L)
+            var charOffset = 0
+            for (i in words.indices) {
+                val w = words[i]
+                val startChar = charOffset.coerceAtMost(text.length)
+                val endChar = (charOffset + w.text.length).coerceAtMost(text.length)
+                charOffset = endChar
+                if (endChar <= startChar) continue
 
-            when {
-                positionMs >= endTime -> {
-                    clipRect(wordLeft, 0f, wordRight, size.height) {
-                        drawText(
-                            textLayoutResult = layoutResult,
-                            color = sungColor,
-                            topLeft = Offset(centerOffsetX, 0f)
+                val startLine = layoutResult.getLineForOffset(startChar)
+                val endLine = layoutResult.getLineForOffset(endChar - 1)
+
+                val segments = ArrayList<Rect>()
+                if (startLine == endLine) {
+                    val firstBox = layoutResult.getBoundingBox(startChar)
+                    val lastBox = layoutResult.getBoundingBox(endChar - 1)
+                    val left = kotlin.math.min(firstBox.left, lastBox.left)
+                    val right = kotlin.math.max(firstBox.right, lastBox.right)
+                    segments.add(
+                        Rect(
+                            centerOffsetX + left,
+                            layoutResult.getLineTop(startLine),
+                            centerOffsetX + right,
+                            layoutResult.getLineBottom(startLine)
+                        )
+                    )
+                } else {
+                    for (line in startLine..endLine) {
+                        val lineLeft = if (line == startLine) {
+                            layoutResult.getBoundingBox(startChar).left
+                        } else {
+                            layoutResult.getLineLeft(line)
+                        }
+                        val lineRight = if (line == endLine) {
+                            layoutResult.getBoundingBox(endChar - 1).right
+                        } else {
+                            layoutResult.getLineRight(line)
+                        }
+                        segments.add(
+                            Rect(
+                                centerOffsetX + kotlin.math.min(lineLeft, lineRight),
+                                layoutResult.getLineTop(line),
+                                centerOffsetX + kotlin.math.max(lineLeft, lineRight),
+                                layoutResult.getLineBottom(line)
+                            )
                         )
                     }
                 }
-                positionMs < w.timeMs -> {
-                    clipRect(wordLeft, 0f, wordRight, size.height) {
-                        drawText(
-                            textLayoutResult = layoutResult,
-                            color = unsungColor,
-                            topLeft = Offset(centerOffsetX, 0f)
-                        )
+
+                val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
+                val span = (endTime - w.timeMs).coerceAtLeast(1L)
+
+                when {
+                    positionMs >= endTime -> {
+                        for (seg in segments) {
+                            clipRect(seg.left, seg.top, seg.right, seg.bottom) {
+                                drawText(
+                                    textLayoutResult = layoutResult,
+                                    color = sungColor,
+                                    topLeft = Offset(centerOffsetX, 0f)
+                                )
+                            }
+                        }
                     }
-                }
-                else -> {
-                    val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
-                    val splitX = wordLeft + wordWidth * progress
-                    clipRect(wordLeft, 0f, splitX, size.height) {
-                        drawText(
-                            textLayoutResult = layoutResult,
-                            color = sungColor,
-                            topLeft = Offset(centerOffsetX, 0f)
-                        )
+                    positionMs < w.timeMs -> {
+                        for (seg in segments) {
+                            clipRect(seg.left, seg.top, seg.right, seg.bottom) {
+                                drawText(
+                                    textLayoutResult = layoutResult,
+                                    color = unsungColor,
+                                    topLeft = Offset(centerOffsetX, 0f)
+                                )
+                            }
+                        }
                     }
-                    clipRect(splitX, 0f, wordRight, size.height) {
-                        drawText(
-                            textLayoutResult = layoutResult,
-                            color = unsungColor,
-                            topLeft = Offset(centerOffsetX, 0f)
-                        )
+                    else -> {
+                        val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
+                        val totalWidth = segments.sumOf { it.width.toDouble() }.toFloat()
+                        var remaining = totalWidth * progress
+                        for (seg in segments) {
+                            if (remaining <= 0f && seg.width <= 0f) continue
+                            val sungPart = seg.width.coerceAtMost(remaining)
+                            remaining -= sungPart
+                            if (seg.width > 0f && sungPart < seg.width) {
+                                val splitX = seg.left + sungPart
+                                clipRect(seg.left, seg.top, splitX, seg.bottom) {
+                                    drawText(
+                                        textLayoutResult = layoutResult,
+                                        color = sungColor,
+                                        topLeft = Offset(centerOffsetX, 0f)
+                                    )
+                                }
+                                clipRect(splitX, seg.top, seg.right, seg.bottom) {
+                                    drawText(
+                                        textLayoutResult = layoutResult,
+                                        color = unsungColor,
+                                        topLeft = Offset(centerOffsetX, 0f)
+                                    )
+                                }
+                            } else {
+                                clipRect(seg.left, seg.top, seg.right, seg.bottom) {
+                                    drawText(
+                                        textLayoutResult = layoutResult,
+                                        color = sungColor,
+                                        topLeft = Offset(centerOffsetX, 0f)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

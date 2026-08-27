@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xiaowei.player.R
@@ -68,7 +69,8 @@ private fun mineCardColor(): Color {
 fun MineScreen(
     onOpenFavorite: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onOpenLyricSynth: () -> Unit = {}
+    onOpenLyricSynth: () -> Unit = {},
+    bottomPadding: Dp = 168.dp
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -92,7 +94,7 @@ fun MineScreen(
 
             .verticalScroll(rememberScrollState())
 
-            .padding(bottom = 96.dp)
+            .padding(bottom = bottomPadding)
     ) {
 
         Text(

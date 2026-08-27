@@ -364,7 +364,8 @@ fun ShuYinApp(
                                 Tab.Mine -> MineScreen(
                                     onOpenFavorite = { requestDetail(Detail.Favorite) },
                                     onOpenSettings = { requestDetail(Detail.Settings) },
-                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) }
+                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) },
+                                    bottomPadding = bottomReserved + 88.dp
                                 )
                             }
                         }
