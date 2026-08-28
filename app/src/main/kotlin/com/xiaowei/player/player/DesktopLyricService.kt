@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Point
@@ -22,6 +23,7 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import android.text.Layout
 import com.xiaowei.player.data.LyricsParser
 import androidx.annotation.ColorInt
 import androidx.annotation.Dimension
@@ -131,6 +133,7 @@ class DesktopLyricService : Service() {
             instance?.let {
                 it.currentFontSize = size
                 it.lyricTextView.textSize = size
+                it.updateLyricMaxWidth()
             }
         }
 
@@ -218,8 +221,7 @@ class DesktopLyricService : Service() {
     private fun createLyricWindow() {
         try {
             val windowSize = Point()
-            @Suppress("DEPRECATION")
-            windowManager.defaultDisplay.getSize(windowSize)
+            windowManager.defaultDisplay.getRealSize(windowSize)
             screenWidth = windowSize.x
             screenHeight = windowSize.y
 
@@ -236,10 +238,10 @@ class DesktopLyricService : Service() {
                         WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
                 format = PixelFormat.TRANSLUCENT
-                width = (resources.displayMetrics.widthPixels * 0.96).toInt()
+                width = WindowManager.LayoutParams.WRAP_CONTENT
                 height = WindowManager.LayoutParams.WRAP_CONTENT
                 gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
-                val halfW = width / 2
+                val halfW = screenWidth / 2
                 x = savedSettings.positionX.coerceIn(-halfW, halfW)
                 y = savedSettings.positionY.coerceAtLeast(0)
                 alpha = 1f
@@ -261,7 +263,12 @@ class DesktopLyricService : Service() {
             lyricLayout = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(dpToPx(32), dpToPx(16), dpToPx(32), dpToPx(16))
+                setPadding(dpToPx(16), dpToPx(16), dpToPx(16), dpToPx(16))
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
                 lyricTextView = KaraokeTextView(context).apply {
                     textSize = currentFontSize
                     textAlignment = View.TEXT_ALIGNMENT_CENTER
@@ -277,6 +284,7 @@ class DesktopLyricService : Service() {
             rootLayout.addView(lyricLayout)
             rootLayout.setOnTouchListener { _, event -> handleTouchEvent(event) }
             windowManager.addView(rootLayout, layoutParams)
+            updateLyricMaxWidth()
         } catch (e: SecurityException) {
             Log.e(TAG, "createLyricWindow: SecurityException", e)
         } catch (e: Exception) {
@@ -285,6 +293,15 @@ class DesktopLyricService : Service() {
     }
 
     private fun dpToPx(dp: Int): Int = (dp * resources.displayMetrics.density).toInt()
+
+    private fun updateLyricMaxWidth() {
+        val padding = dpToPx(16)
+        val absX = Math.abs(layoutParams.x)
+        val avail = (screenWidth - 2 * absX - padding * 2).coerceAtLeast(padding * 2)
+        lyricTextView.maxWidth = avail
+        lyricTextView.requestLayout()
+        lyricTextView.invalidate()
+    }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun handleTouchEvent(event: MotionEvent): Boolean {
@@ -325,11 +342,12 @@ class DesktopLyricService : Service() {
                         isDragging = true
                         val newX = initialX + deltaX
                         val newY = initialY + deltaY
-                        val halfW = layoutParams.width / 2
+                        val halfW = screenWidth / 2
                         val viewH = rootLayout.height
                         layoutParams.x = newX.coerceIn(-halfW, halfW)
                         layoutParams.y = newY.coerceIn(0, (screenHeight - viewH).coerceAtLeast(0))
                         windowManager.updateViewLayout(rootLayout, layoutParams)
+                        updateLyricMaxWidth()
                     }
                 }
                 return true
@@ -676,6 +694,25 @@ class DesktopLyricService : Service() {
         choreographerCallback = null
     }
 
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (!::windowManager.isInitialized || !::layoutParams.isInitialized) return
+        val newSize = Point()
+        windowManager.defaultDisplay.getRealSize(newSize)
+        screenWidth = newSize.x
+        screenHeight = newSize.y
+        val halfW = screenWidth / 2
+        layoutParams.x = layoutParams.x.coerceIn(-halfW, halfW)
+        val viewH = rootLayout.height
+        layoutParams.y = layoutParams.y.coerceIn(0, (screenHeight - viewH).coerceAtLeast(0))
+        try {
+            windowManager.updateViewLayout(rootLayout, layoutParams)
+        } catch (e: Exception) {
+            Log.e(TAG, "onConfigurationChanged", e)
+        }
+        updateLyricMaxWidth()
+    }
+
     override fun onDestroy() {
         instance = null
         stopKaraokeTick()
@@ -748,20 +785,7 @@ private class KaraokeTextView(context: android.content.Context) : TextView(conte
             return
         }
         val textWidth = layout.width.toFloat().coerceAtLeast(1f)
-        val wordStartPx = FloatArray(words.size)
-        val wordEndPx = FloatArray(words.size)
-        var charOffset = 0
         val totalChars = text.length
-        for (i in words.indices) {
-            val w = words[i]
-            val startChar = charOffset.coerceAtMost(totalChars)
-            val endChar = (charOffset + w.text.length).coerceAtMost(totalChars)
-            wordStartPx[i] = if (startChar < totalChars) layout.getPrimaryHorizontal(startChar) else textWidth
-            wordEndPx[i] = if (endChar <= totalChars) {
-                if (endChar == totalChars) textWidth else layout.getPrimaryHorizontal(endChar)
-            } else textWidth
-            charOffset = endChar
-        }
 
         val sungColor = currentTextColor
         val r = Color.red(sungColor)
@@ -782,53 +806,99 @@ private class KaraokeTextView(context: android.content.Context) : TextView(conte
         var sungCount = 0
         var dimCount = 0
         var progressCount = 0
-        val lineBaseline = layout.getLineBaseline(0).toFloat()
-        val lineLeft = layout.getLineLeft(0)
 
         val workPaint = Paint(paint)
         workPaint.shader = null
 
+        var charOffset = 0
         for (i in words.indices) {
             val w = words[i]
-            val startPx = wordStartPx[i]
-            val endPx = wordEndPx[i]
+            val startChar = charOffset.coerceAtMost(totalChars)
+            val endChar = (charOffset + w.text.length).coerceAtMost(totalChars)
+            charOffset = endChar
+            if (endChar <= startChar) continue
             val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
             val span = (endTime - w.timeMs).coerceAtLeast(1L)
             val wordText = w.text
-            val wordX = lineLeft + startPx
 
             when {
                 positionMs >= endTime -> {
                     sungCount++
                     workPaint.color = sungColor
-                    canvas.drawText(wordText, wordX, lineBaseline, workPaint)
+                    drawWordSegments(canvas, layout, wordText, startChar, endChar, workPaint)
                 }
                 positionMs < w.timeMs -> {
                     dimCount++
                     workPaint.color = dimColor
-                    canvas.drawText(wordText, wordX, lineBaseline, workPaint)
+                    drawWordSegments(canvas, layout, wordText, startChar, endChar, workPaint)
                 }
                 else -> {
                     progressCount++
                     val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
-                    val wordWidth = endPx - startPx
-                    val splitX = wordX + wordWidth * progress
-                    canvas.save()
-                    canvas.clipRect(wordX, 0f, splitX, height.toFloat())
-                    workPaint.color = sungColor
-                    canvas.drawText(wordText, wordX, lineBaseline, workPaint)
-                    canvas.restore()
-                    canvas.save()
-                    canvas.clipRect(splitX, 0f, wordX + wordWidth, height.toFloat())
-                    workPaint.color = dimColor
-                    canvas.drawText(wordText, wordX, lineBaseline, workPaint)
-                    canvas.restore()
+                    drawWordSegments(canvas, layout, wordText, startChar, endChar, workPaint, wordText.length * progress, sungColor, dimColor)
                 }
             }
         }
         drawCounter++
         if (drawCounter % 30 == 0) {
             android.util.Log.d("KARAOKE_DBG", "KaraokeTV.onDraw: pos=${positionMs}ms words=${words.size} sung=$sungCount dim=$dimCount progress=$progressCount textWidth=$textWidth")
+        }
+    }
+
+    private fun drawWordSegments(
+        canvas: Canvas,
+        layout: Layout,
+        wordText: String,
+        startChar: Int,
+        endChar: Int,
+        workPaint: Paint,
+        splitInWord: Float = -1f,
+        sungColor: Int = 0,
+        dimColor: Int = 0
+    ) {
+        var drawn = 0
+        while (drawn < wordText.length && startChar + drawn < endChar) {
+            val abs = startChar + drawn
+            val line = layout.getLineForOffset(abs)
+            val lineEnd = layout.getLineEnd(line).coerceAtMost(endChar)
+            val count = lineEnd - abs
+            if (count <= 0) break
+            val segment = wordText.substring(drawn, drawn + count)
+            val x = layout.getLineLeft(line) + layout.getPrimaryHorizontal(abs)
+            val baseline = layout.getLineBaseline(line).toFloat()
+            if (splitInWord < 0f) {
+                canvas.drawText(segment, x, baseline, workPaint)
+            } else {
+                val segWidth = workPaint.measureText(segment)
+                val segStart = drawn.toFloat()
+                val segEnd = (drawn + count).toFloat()
+                val lineTop = layout.getLineTop(line).toFloat()
+                val lineBottom = layout.getLineBottom(line).toFloat()
+                when {
+                    segEnd <= splitInWord -> {
+                        workPaint.color = sungColor
+                        canvas.drawText(segment, x, baseline, workPaint)
+                    }
+                    segStart >= splitInWord -> {
+                        workPaint.color = dimColor
+                        canvas.drawText(segment, x, baseline, workPaint)
+                    }
+                    else -> {
+                        val splitX = x + segWidth * ((splitInWord - segStart) / count)
+                        workPaint.color = sungColor
+                        canvas.save()
+                        canvas.clipRect(x, lineTop, splitX, lineBottom)
+                        canvas.drawText(segment, x, baseline, workPaint)
+                        canvas.restore()
+                        workPaint.color = dimColor
+                        canvas.save()
+                        canvas.clipRect(splitX, lineTop, x + segWidth, lineBottom)
+                        canvas.drawText(segment, x, baseline, workPaint)
+                        canvas.restore()
+                    }
+                }
+            }
+            drawn += count
         }
     }
 }
