@@ -48,6 +48,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.dynamicDarkColorScheme
+import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -63,6 +65,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -74,6 +77,8 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.xiaowei.player.ui.theme.DEFAULT_THEME_COLOR_INDEX
+import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 import com.xiaowei.player.ui.theme.rememberZMusicColorScheme
 
 class DesktopLyricService : Service() {
@@ -140,8 +145,16 @@ class DesktopLyricService : Service() {
 
         fun updateTextColor(@ColorInt color: Int) {
             instance?.let {
+                it.followTheme = false
                 it.currentTextColor = color
                 it.lyricTextView.setTextColor(color)
+            }
+        }
+
+        fun updateTextFollowTheme() {
+            instance?.let {
+                it.followTheme = true
+                it.applyThemeColor()
             }
         }
 
@@ -186,6 +199,8 @@ class DesktopLyricService : Service() {
     private var isLocked = false
     private var currentFontSize = 20f
     @ColorInt private var currentTextColor = Color.WHITE
+    private var followTheme = false
+    private var themeColorCallback: (() -> Unit)? = null
 
     private var lastTapTime = 0L
     private val DOUBLE_TAP_THRESHOLD = 300
@@ -198,6 +213,12 @@ class DesktopLyricService : Service() {
         super.onCreate()
         instance = this
         loadSettings()
+        themeColorCallback = {
+            if (followTheme) applyThemeColor()
+        }
+        themeColorCallback?.let {
+            com.xiaowei.player.data.ThemePrefs.get(this).addColorChangedListener(it)
+        }
         try {
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             createLyricWindow()
@@ -215,8 +236,30 @@ class DesktopLyricService : Service() {
     private fun loadSettings() {
         val settings = DesktopLyricSettings.getSettings(this)
         currentFontSize = settings.fontSize
-        currentTextColor = settings.textColor
+        followTheme = settings.textColor == DesktopLyricSettings.THEME_COLOR
+        currentTextColor = if (followTheme) currentThemePrimaryColor() else settings.textColor
         isLocked = settings.enabled
+    }
+
+    private fun currentThemePrimaryColor(): Int {
+        val themePrefs = com.xiaowei.player.data.ThemePrefs.get(this)
+        val isDark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
+                Configuration.UI_MODE_NIGHT_YES
+        if (themePrefs.dynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val scheme = if (isDark) dynamicDarkColorScheme(this) else dynamicLightColorScheme(this)
+            return scheme.primary.toArgb()
+        }
+        val preset = PRESET_THEME_COLORS.getOrElse(themePrefs.themeColorIndex) {
+            PRESET_THEME_COLORS[DEFAULT_THEME_COLOR_INDEX]
+        }
+        val primary = if (isDark) preset.darkPrimary else preset.lightPrimary
+        return primary.toArgb()
+    }
+
+    private fun applyThemeColor() {
+        currentTextColor = currentThemePrimaryColor()
+        lyricTextView.setTextColor(currentTextColor)
+        lyricTextView.invalidate()
     }
 
     @SuppressLint("InflateParams")
@@ -375,8 +418,9 @@ class DesktopLyricService : Service() {
                 composeView.setViewTreeSavedStateRegistryOwner(it)
             }
             composeView.setContent {
+                val configuration = LocalConfiguration.current
                 val isDark = android.content.res.Configuration.UI_MODE_NIGHT_YES ==
-                    resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
+                    configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
 
                 val themePrefs = com.xiaowei.player.data.ThemePrefs.get(this@DesktopLyricService)
                 val colorScheme = rememberZMusicColorScheme(
@@ -474,7 +518,7 @@ class DesktopLyricService : Service() {
         }
 
         val allColors = remember(colorScheme.primary) {
-            presetColors + listOf(colorScheme.primary.toArgb())
+            listOf(colorScheme.primary.toArgb()) + presetColors
         }
 
         fun saveSettings() {
@@ -535,8 +579,8 @@ class DesktopLyricService : Service() {
                     flingBehavior = rememberSnapFlingBehavior(lazyListState = colorListState),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    itemsIndexed(allColors) { _, color ->
-                        val selected = textColor == color
+                    itemsIndexed(allColors) { index, color ->
+                        val selected = if (index == 0) textColor == DesktopLyricSettings.THEME_COLOR else textColor == color
                         Surface(
                             shape = CircleShape,
                             color = androidx.compose.ui.graphics.Color(color),
@@ -547,9 +591,15 @@ class DesktopLyricService : Service() {
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .clickable {
-                                        textColor = color
-                                        DesktopLyricService.updateTextColor(color)
-                                        saveSettings()
+                                        if (index == 0) {
+                                            textColor = DesktopLyricSettings.THEME_COLOR
+                                            DesktopLyricService.updateTextFollowTheme()
+                                            saveSettings()
+                                        } else {
+                                            textColor = color
+                                            DesktopLyricService.updateTextColor(color)
+                                            saveSettings()
+                                        }
                                     }
                             )
                         }
@@ -727,10 +777,15 @@ class DesktopLyricService : Service() {
             Log.e(TAG, "onConfigurationChanged", e)
         }
         updateLyricMaxWidth()
+        if (followTheme) applyThemeColor()
     }
 
     override fun onDestroy() {
         instance = null
+        themeColorCallback?.let {
+            com.xiaowei.player.data.ThemePrefs.get(this).removeColorChangedListener(it)
+        }
+        themeColorCallback = null
         stopKaraokeTick()
         hideSettings()
         settingsLifecycleOwner?.dispatchEvent(Lifecycle.Event.ON_PAUSE)
@@ -921,12 +976,13 @@ private class KaraokeTextView(context: android.content.Context) : TextView(conte
 
 data class DesktopLyricSettings(
     @Dimension(unit = Dimension.SP) val fontSize: Float = 20f,
-    @ColorInt val textColor: Int = Color.WHITE,
+    @ColorInt val textColor: Int = THEME_COLOR,
     val positionX: Int = 0,
     val positionY: Int = 200,
     val enabled: Boolean = false
 ) {
     companion object {
+        const val THEME_COLOR = Int.MIN_VALUE
 
         fun getSettings(context: Context): DesktopLyricSettings {
             val dao = com.xiaowei.player.data.db.AppDatabase.get(context).desktopLyricSettingsDao()
@@ -966,7 +1022,7 @@ data class DesktopLyricSettings(
                 com.xiaowei.player.data.db.DesktopLyricSettingsEntity(
                     id = 0,
                     fontSize = current?.fontSize ?: 20f,
-                    textColor = current?.textColor ?: Color.WHITE,
+                    textColor = current?.textColor ?: DesktopLyricSettings.THEME_COLOR,
                     positionX = x,
                     positionY = y,
                     enabled = current?.enabled ?: false
