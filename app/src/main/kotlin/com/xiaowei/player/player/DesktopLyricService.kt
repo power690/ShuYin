@@ -30,10 +30,10 @@ import androidx.annotation.Dimension
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -45,6 +45,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -190,6 +191,7 @@ class DesktopLyricService : Service() {
     private val DOUBLE_TAP_THRESHOLD = 300
 
     private var settingsComposeView: ComposeView? = null
+    private var settingsMenuParams: WindowManager.LayoutParams? = null
     private var settingsLifecycleOwner: ServiceLifecycleOwner? = null
 
     override fun onCreate() {
@@ -305,24 +307,6 @@ class DesktopLyricService : Service() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun handleTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_OUTSIDE) {
-            if (settingsComposeView != null) {
-                hideSettings()
-                return true
-            }
-            return false
-        }
-
-        if (settingsComposeView != null) {
-            val popupLocation = IntArray(2)
-            settingsComposeView?.getLocationOnScreen(popupLocation)
-            val popupW = settingsComposeView?.width ?: 0
-            val popupH = settingsComposeView?.height ?: 0
-            val inPopup = event.rawX >= popupLocation[0] && event.rawX <= popupLocation[0] + popupW &&
-                    event.rawY >= popupLocation[1] && event.rawY <= popupLocation[1] + popupH
-            if (inPopup) return false
-        }
-
         when (event.action) {
             MotionEvent.ACTION_DOWN -> {
                 if (!isLocked) {
@@ -358,10 +342,6 @@ class DesktopLyricService : Service() {
                     DesktopLyricSettings.savePosition(this, layoutParams.x, layoutParams.y)
                     return true
                 }
-                if (settingsComposeView != null) {
-                    hideSettings()
-                    return true
-                }
                 val currentTime = System.currentTimeMillis()
                 if (currentTime - lastTapTime < DOUBLE_TAP_THRESHOLD) {
                     showSettings()
@@ -381,12 +361,19 @@ class DesktopLyricService : Service() {
             return
         }
         try {
-            layoutParams.flags = layoutParams.flags or
-                    (WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH)
-            windowManager.updateViewLayout(rootLayout, layoutParams)
+            val loc = IntArray(2)
+            rootLayout.getLocationOnScreen(loc)
+            val menuWidth = dpToPx(320)
+            val menuX = (loc[0] + rootLayout.width / 2 - menuWidth / 2)
+                .coerceIn(dpToPx(8), (screenWidth - menuWidth - dpToPx(8)).coerceAtLeast(dpToPx(8)))
+            val menuY = (loc[1] + rootLayout.height + dpToPx(8))
+                .coerceAtMost((screenHeight - dpToPx(16)).coerceAtLeast(0))
 
             val composeView = ComposeView(this)
+            settingsLifecycleOwner?.let {
+                composeView.setViewTreeLifecycleOwner(it)
+                composeView.setViewTreeSavedStateRegistryOwner(it)
+            }
             composeView.setContent {
                 val isDark = android.content.res.Configuration.UI_MODE_NIGHT_YES ==
                     resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK
@@ -400,7 +387,6 @@ class DesktopLyricService : Service() {
                 MaterialTheme(colorScheme = colorScheme) {
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth()
                             .pointerInput(Unit) {
                                 detectTapGestures { _ -> hideSettings() }
                             }
@@ -413,13 +399,46 @@ class DesktopLyricService : Service() {
                 }
             }
 
-            val composeParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = dpToPx(8) }
-            composeView.layoutParams = composeParams
-            lyricLayout.addView(composeView)
+            composeView.setOnTouchListener { _, e ->
+                if (e.action == MotionEvent.ACTION_OUTSIDE) {
+                    hideSettings()
+                    true
+                } else {
+                    false
+                }
+            }
+            val menuParams = WindowManager.LayoutParams().apply {
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+                flags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                        WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                format = PixelFormat.TRANSLUCENT
+                width = WindowManager.LayoutParams.WRAP_CONTENT
+                height = WindowManager.LayoutParams.WRAP_CONTENT
+                gravity = Gravity.TOP or Gravity.START
+                x = menuX
+                y = menuY
+            }
+            windowManager.addView(composeView, menuParams)
             settingsComposeView = composeView
+            settingsMenuParams = menuParams
+            composeView.post {
+                val h = composeView.height
+                if (h > 0 && menuY + h > screenHeight) {
+                    menuParams.y = (screenHeight - h - dpToPx(16)).coerceAtLeast(0)
+                    try {
+                        windowManager.updateViewLayout(composeView, menuParams)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "showSettings: adjust", e)
+                    }
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "showSettings: Error", e)
         }
@@ -427,15 +446,10 @@ class DesktopLyricService : Service() {
 
     private fun hideSettings() {
         settingsComposeView?.let {
-            try { lyricLayout.removeView(it) } catch (e: Exception) { Log.e(TAG, "hideSettings", e) }
+            try { windowManager.removeView(it) } catch (e: Exception) { Log.e(TAG, "hideSettings", e) }
         }
         settingsComposeView = null
-        try {
-            layoutParams.flags = layoutParams.flags and
-                    (WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-                            WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH).inv()
-            windowManager.updateViewLayout(rootLayout, layoutParams)
-        } catch (e: Exception) { Log.e(TAG, "hideSettings: flags", e) }
+        settingsMenuParams = null
     }
 
     @Composable
@@ -514,12 +528,14 @@ class DesktopLyricService : Service() {
 
                 Spacer(Modifier.height(16.dp))
 
+                val colorListState = rememberLazyListState()
                 LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(end = 10.dp),
+                    state = colorListState,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    flingBehavior = rememberSnapFlingBehavior(lazyListState = colorListState),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    itemsIndexed(allColors, key = { _, color -> color }) { _, color ->
+                    itemsIndexed(allColors) { _, color ->
                         val selected = textColor == color
                         Surface(
                             shape = CircleShape,
