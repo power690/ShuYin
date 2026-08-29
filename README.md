@@ -68,6 +68,7 @@
 | **UI** | Jetpack Compose + Material 3 |
 | **播放器** | AndroidX Media3 (ExoPlayer) |
 | **FLAC 解码** | HeHang0 预编译的 ExoPlayer FLAC 扩展（libFLAC native）|
+| **液态玻璃** | Kyant0 Backdrop / AndroidLiquidGlass（Compose Liquid Glass）|
 | **数据库** | Room（收藏 / 搜索历史 / 播放状态 / 桌面歌词设置 / 用户资料）|
 | **图片加载** | Coil（内存缓存 25% + 磁盘缓存 100MB）|
 | **架构** | MVVM + ViewModel + StateFlow |
@@ -149,6 +150,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 本项目使用的第三方库协议如下：
 - Jetpack Compose / Media3 / Room / Coil：Apache License 2.0
 - HeHang0 ExoPlayer FLAC 扩展：Apache License 2.0
+- Kyant0 Backdrop 液态玻璃库（AndroidLiquidGlass）：Apache License 2.0
 - mp3agic：MIT License
 
 ## 💬 项目交流与反馈
@@ -167,6 +169,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 🙏 致谢
 
+- [AndroidLiquidGlass（Backdrop）](https://github.com/Kyant0/AndroidLiquidGlass) - 液态玻璃效果与果冻拖动/按压光斑交互方案（Kyant0）
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - 二级页面转场动画方案
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - 部分代码参考
 - [HeHang0](https://github.com/HeHang0) - ExoPlayer FLAC 扩展预编译版
@@ -253,6 +256,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 | **UI** | Jetpack Compose + Material 3 |
 | **Player** | AndroidX Media3 (ExoPlayer) |
 | **FLAC Decoding** | HeHang0's precompiled ExoPlayer FLAC extension (libFLAC native) |
+| **Liquid Glass** | Kyant0 Backdrop / AndroidLiquidGlass (Compose Liquid Glass) |
 | **Database** | Room (favorites / search history / playback state / desktop lyrics settings / user profile) |
 | **Image Loading** | Coil (25% memory cache + 100MB disk cache) |
 | **Architecture** | MVVM + ViewModel + StateFlow |
@@ -333,6 +337,7 @@ See the [LICENSE](LICENSE) file or [GNU GPL-3.0 official site](https://www.gnu.o
 ### Third-party License
 - Jetpack Compose / Media3 / Room / Coil: Apache License 2.0
 - HeHang0 ExoPlayer FLAC extension: Apache License 2.0
+- Kyant0 Backdrop liquid glass library (AndroidLiquidGlass): Apache License 2.0
 - mp3agic: MIT License
 
 ## 💬 Communication & Feedback
@@ -351,6 +356,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 🙏 Acknowledgments
 
+- [AndroidLiquidGlass (Backdrop)](https://github.com/Kyant0/AndroidLiquidGlass) - Liquid glass effects and jelly drag / press highlight interaction solution (by Kyant0)
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - Secondary page transition animation solution
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - Partial code reference
 - [HeHang0](https://github.com/HeHang0) - Precompiled ExoPlayer FLAC extension
