@@ -1,6 +1,6 @@
 # 鼠音 ShuYin
 
-一款开源的 Android 本地音乐播放器，基于 Jetpack Compose 构建，支持 FLAC 无损解码、桌面歌词、悬浮歌词、40 种语言界面，采用 iOS 风格的页面转场动画。
+一款开源的 Android 本地音乐播放器，基于 Jetpack Compose 构建，支持 FLAC 无损解码、桌面歌词、悬浮歌词、液态玻璃导航栏与迷你播放卡片、40 种语言界面，采用 iOS 风格的页面转场动画。
 
 ## ✨ 功能特性
 
@@ -13,6 +13,7 @@
 
 ### 🎨 界面设计
 - **Jetpack Compose 全量构建**：纯 Compose UI，Material 3 设计
+- **液态玻璃导航栏**：底部导航栏与迷你播放卡片采用液态玻璃效果（Android 13+ 折射透镜+色差、Android 12 磨砂+饱和度、Android 11 及以下不透明主题色），果冻挤压拖动动画、按压光斑
 - **iOS 风格转场动画**：二级页面 push 时主页压缩 + 高斯模糊（Android 12+），弹簧动画
 - **动态取色**：Android 12+ 跟随系统壁纸动态取色
 - **主题色自定义**：10 种预设主题色，Android 11 及以下使用预设主题色
@@ -77,7 +78,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v1.2.0.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v1.5.0.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
@@ -176,7 +177,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 📊 项目状态
 
-- **当前版本**：v1.2.0
+- **当前版本**：v1.5.0
 - **最低支持**：Android 6.0 (API 23)
 - **目标版本**：Android 17 (API 37)
 
@@ -184,7 +185,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 # ShuYin (English)
 
-An open-source Android local music player built with Jetpack Compose, featuring FLAC lossless decoding, desktop floating lyrics, 40-language UI, and iOS-style page transition animations.
+An open-source Android local music player built with Jetpack Compose, featuring FLAC lossless decoding, desktop floating lyrics, liquid glass navigation bar and mini player card, 40-language UI, and iOS-style page transition animations.
 
 ## ✨ Features
 
@@ -197,6 +198,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 
 ### 🎨 UI Design
 - **Fully Jetpack Compose**: Pure Compose UI with Material 3 design
+- **Liquid Glass Navigation Bar**: Bottom navigation bar and mini player card with liquid glass effects (Android 13+ refraction lens + chromatic aberration, Android 12 frosted + vibrancy, Android 11 and below opaque theme color), jelly squash drag animation, press highlight
 - **iOS-style Transitions**: Secondary pages push with background compression + Gaussian blur (Android 12+), spring animations
 - **Dynamic Color**: Android 12+ follows system wallpaper for dynamic theming
 - **Theme Customization**: 10 preset theme colors; Android 11 and below uses preset theme color
@@ -261,7 +263,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## 📦 Download & Install
 
 ### Option 1: Download APK
-Go to the [Release](../../releases) page to download the latest `ShuYin-release-v1.2.0.apk` and install directly.
+Go to the [Release](../../releases) page to download the latest `ShuYin-release-v1.5.0.apk` and install directly.
 
 ### Option 2: Build from Source
 ```bash
@@ -359,6 +361,6 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 📊 Project Status
 
-- **Current Version**: v1.2.0
+- **Current Version**: v1.5.0
 - **Min Support**: Android 6.0 (API 23)
 - **Target Version**: Android 17 (API 37)

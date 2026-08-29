@@ -11,8 +11,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
@@ -56,6 +58,8 @@ import com.xiaowei.player.navkit.progressiveBlur
 import com.xiaowei.player.navkit.stackSceneSpringSpec
 import com.xiaowei.player.navkit.supportsHardwareBlur
 import com.xiaowei.player.player.MusicPlayerManager
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.xiaowei.player.ui.screens.AlbumDetailScreen
 import com.xiaowei.player.ui.screens.ArtistDetailScreen
 import com.xiaowei.player.ui.screens.EmptyScanScreen
@@ -125,6 +129,10 @@ fun ShuYinApp(
     val playerEnterProgress = remember { Animatable(0f) }
 
     val supportsBlur = remember { supportsHardwareBlur }
+
+    val useLiquidGlass = LiquidGlassEnabled
+    val contentBackdrop = rememberLayerBackdrop()
+    val permBackdrop = rememberLayerBackdrop()
 
     var detailNonce by remember { mutableStateOf(0) }
 
@@ -253,10 +261,14 @@ fun ShuYinApp(
     ) { innerPadding ->
 
         val navBarHeight = innerPadding.calculateBottomPadding()
+        val systemNavBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
         val showMiniPlayer = currentSong != null && !playerExpanded && !inDetail
-        val miniPlayerHeight: Dp = if (showMiniPlayer) 80.dp else 0.dp
-        val bottomReserved = navBarHeight + miniPlayerHeight
+        val bottomReserved: Dp = if (useLiquidGlass) {
+            systemNavBarHeight + (if (showMiniPlayer) 176.dp else 90.dp)
+        } else {
+            navBarHeight + (if (showMiniPlayer) 80.dp else 0.dp)
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -266,26 +278,53 @@ fun ShuYinApp(
                 !library.permissionGranted -> {
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        NoPermissionScreen(onRequest = onRefresh)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (useLiquidGlass) Modifier.layerBackdrop(permBackdrop)
+                                    else Modifier
+                                )
+                        ) {
+                            NoPermissionScreen(onRequest = onRefresh)
+                        }
 
                         if (!playerExpanded) {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            ) {
-                                tabs.forEach { tab ->
-                                    NavigationBarItem(
-                                        selected = mainPagerState.currentPage == tab.ordinal,
-                                        onClick = {
-                                            if (mainPagerState.currentPage != tab.ordinal) {
-                                                mainScope.launch {
-                                                    mainPagerState.animateScrollToPage(tab.ordinal)
-                                                }
+                            if (useLiquidGlass) {
+                                LiquidGlassNavBar(
+                                    backdrop = permBackdrop,
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.currentPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
                                             }
-                                        },
-                                        icon = { Icon(tab.icon, contentDescription = null) },
-                                        label = { Text(Strings.get(tab.labelKey)) }
-                                    )
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = systemNavBarHeight + 24.dp)
+                                )
+                            } else {
+                                NavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.align(Alignment.BottomCenter)
+                                ) {
+                                    tabs.forEach { tab ->
+                                        NavigationBarItem(
+                                            selected = mainPagerState.currentPage == tab.ordinal,
+                                            onClick = {
+                                                if (mainPagerState.currentPage != tab.ordinal) {
+                                                    mainScope.launch {
+                                                        mainPagerState.animateScrollToPage(tab.ordinal)
+                                                    }
+                                                }
+                                            },
+                                            icon = { Icon(tab.icon, contentDescription = null) },
+                                            label = { Text(Strings.get(tab.labelKey)) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -316,57 +355,66 @@ fun ShuYinApp(
                             }
                     ) {
 
-                        HorizontalPager(
-                            state = mainPagerState,
-                            modifier = Modifier.fillMaxSize(),
-
-                            beyondViewportPageCount = 1,
-
-                            userScrollEnabled = false
-                        ) { page ->
-                            val tab = tabs[page]
-                            when (tab) {
-                                Tab.Recommend -> {
-                                    if (library.isLoading) LoadingScreen()
-                                    else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
-                                    else RecommendScreen(
-                                        library = library,
-                                        playerState = playerState,
-                                        onPlaySong = onPlaySong,
-                                        onPlayAll = onPlayAll,
-                                        onOpenArtist = { requestDetail(Detail.Artist(it)) },
-                                        onOpenAlbum = { requestDetail(Detail.Album(it)) },
-                                        onOpenPlayer = { playerExpanded = true },
-                                        onRefresh = onRefresh,
-                                        onOpenRecommendCard = { card -> requestDetail(Detail.RecommendDetail(card)) },
-                                        onOpenSearch = { requestDetail(Detail.Search) },
-                                        listState = recommendListState,
-                                        bottomPadding = bottomReserved
-                                    )
-                                }
-                                Tab.Library -> {
-                                    if (library.isLoading) LoadingScreen()
-                                    else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
-                                    else LibraryScreen(
-                                        library = library,
-                                        playerState = playerState,
-                                        onPlaySong = onPlaySong,
-                                        onPlayAll = onPlayAll,
-                                        onSearch = onSearch,
-                                        onOpenArtist = { requestDetail(Detail.Artist(it)) },
-                                        onOpenAlbum = { requestDetail(Detail.Album(it)) },
-                                        onOpenPlayer = { playerExpanded = true },
-                                        initialPage = libraryPage,
-                                        onPageChanged = { libraryPage = it },
-                                        bottomPadding = bottomReserved
-                                    )
-                                }
-                                Tab.Mine -> MineScreen(
-                                    onOpenFavorite = { requestDetail(Detail.Favorite) },
-                                    onOpenSettings = { requestDetail(Detail.Settings) },
-                                    onOpenLyricSynth = { requestDetail(Detail.LyricSynth) },
-                                    bottomPadding = bottomReserved + 88.dp
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .then(
+                                    if (useLiquidGlass) Modifier.layerBackdrop(contentBackdrop)
+                                    else Modifier
                                 )
+                        ) {
+                            HorizontalPager(
+                                state = mainPagerState,
+                                modifier = Modifier.fillMaxSize(),
+
+                                beyondViewportPageCount = 1,
+
+                                userScrollEnabled = false
+                            ) { page ->
+                                val tab = tabs[page]
+                                when (tab) {
+                                    Tab.Recommend -> {
+                                        if (library.isLoading) LoadingScreen()
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        else RecommendScreen(
+                                            library = library,
+                                            playerState = playerState,
+                                            onPlaySong = onPlaySong,
+                                            onPlayAll = onPlayAll,
+                                            onOpenArtist = { requestDetail(Detail.Artist(it)) },
+                                            onOpenAlbum = { requestDetail(Detail.Album(it)) },
+                                            onOpenPlayer = { playerExpanded = true },
+                                            onRefresh = onRefresh,
+                                            onOpenRecommendCard = { card -> requestDetail(Detail.RecommendDetail(card)) },
+                                            onOpenSearch = { requestDetail(Detail.Search) },
+                                            listState = recommendListState,
+                                            bottomPadding = bottomReserved
+                                        )
+                                    }
+                                    Tab.Library -> {
+                                        if (library.isLoading) LoadingScreen()
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        else LibraryScreen(
+                                            library = library,
+                                            playerState = playerState,
+                                            onPlaySong = onPlaySong,
+                                            onPlayAll = onPlayAll,
+                                            onSearch = onSearch,
+                                            onOpenArtist = { requestDetail(Detail.Artist(it)) },
+                                            onOpenAlbum = { requestDetail(Detail.Album(it)) },
+                                            onOpenPlayer = { playerExpanded = true },
+                                            initialPage = libraryPage,
+                                            onPageChanged = { libraryPage = it },
+                                            bottomPadding = bottomReserved
+                                        )
+                                    }
+                                    Tab.Mine -> MineScreen(
+                                        onOpenFavorite = { requestDetail(Detail.Favorite) },
+                                        onOpenSettings = { requestDetail(Detail.Settings) },
+                                        onOpenLyricSynth = { requestDetail(Detail.LyricSynth) },
+                                        bottomPadding = bottomReserved + 88.dp
+                                    )
+                                }
                             }
                         }
 
@@ -374,7 +422,9 @@ fun ShuYinApp(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
-                                    .padding(bottom = navBarHeight)
+                                    .padding(
+                                        bottom = if (useLiquidGlass) systemNavBarHeight + 94.dp else navBarHeight
+                                    )
                             ) {
                                 MiniPlayerBar(
                                     song = currentSong,
@@ -385,33 +435,55 @@ fun ShuYinApp(
                                     onPrev = onSkipPrev,
                                     onNext = onSkipNext,
                                     onSeek = onSeek,
-                                    onClick = { playerExpanded = true }
+                                    onClick = { playerExpanded = true },
+                                    glassBackdrop = if (useLiquidGlass) contentBackdrop else null
                                 )
                             }
                         }
 
                         if (!playerExpanded) {
-                            NavigationBar(
-                                containerColor = MaterialTheme.colorScheme.surface,
-                                modifier = Modifier.align(Alignment.BottomCenter)
-                            ) {
-                                Tab.values().forEach { tab ->
-                                    NavigationBarItem(
-                                        selected = mainPagerState.currentPage == tab.ordinal,
-                                        onClick = {
+                            if (useLiquidGlass) {
+                                LiquidGlassNavBar(
+                                    backdrop = contentBackdrop,
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.currentPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
+                                            }
+                                        }
+                                        if (detail != Detail.None) {
+                                            popDetail()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = systemNavBarHeight + 24.dp)
+                                )
+                            } else {
+                                NavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier.align(Alignment.BottomCenter)
+                                ) {
+                                    Tab.values().forEach { tab ->
+                                        NavigationBarItem(
+                                            selected = mainPagerState.currentPage == tab.ordinal,
+                                            onClick = {
 
-                                            if (mainPagerState.currentPage != tab.ordinal) {
-                                                mainScope.launch {
-                                                    mainPagerState.animateScrollToPage(tab.ordinal)
+                                                if (mainPagerState.currentPage != tab.ordinal) {
+                                                    mainScope.launch {
+                                                        mainPagerState.animateScrollToPage(tab.ordinal)
+                                                    }
                                                 }
-                                            }
-                                            if (detail != Detail.None) {
-                                                popDetail()
-                                            }
-                                        },
-                                        icon = { Icon(tab.icon, contentDescription = null) },
-                                        label = { Text(Strings.get(tab.labelKey)) }
-                                    )
+                                                if (detail != Detail.None) {
+                                                    popDetail()
+                                                }
+                                            },
+                                            icon = { Icon(tab.icon, contentDescription = null) },
+                                            label = { Text(Strings.get(tab.labelKey)) }
+                                        )
+                                    }
                                 }
                             }
                         }
