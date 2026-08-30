@@ -122,6 +122,7 @@ fun ShuYinApp(
     var detail by remember { mutableStateOf<Detail>(Detail.None) }
 
     var displayedDetail by remember { mutableStateOf<Detail>(Detail.None) }
+    var detailBackStack by remember { mutableStateOf<List<Detail>>(emptyList()) }
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
     var lastSong by remember { mutableStateOf<com.xiaowei.player.data.Song?>(null) }
 
@@ -140,13 +141,21 @@ fun ShuYinApp(
 
             detailNonce++
         } else {
+            if (detail != Detail.None && newDetail != Detail.None) {
+                detailBackStack = detailBackStack + detail
+            }
             detail = newDetail
             detailNonce++
         }
     }
     fun popDetail() {
-        if (detail == Detail.None) return  
-        detail = Detail.None
+        if (detail == Detail.None) return
+        if (detailBackStack.isNotEmpty()) {
+            detail = detailBackStack.last()
+            detailBackStack = detailBackStack.dropLast(1)
+        } else {
+            detail = Detail.None
+        }
         detailNonce++
     }
 
@@ -155,7 +164,7 @@ fun ShuYinApp(
         if (target != Detail.None) {
 
             if (displayedDetail != target) {
-
+                enterProgress.snapTo(0f)
                 displayedDetail = target
             }
 
