@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -66,6 +67,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -83,10 +85,18 @@ import com.xiaowei.player.ui.theme.MineCardLight
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 
 @Composable
+private fun settingsCardColor(): Color {
+    val isLight = MaterialTheme.colorScheme.surface.luminance() >= 0.5f
+    return if (isLight) MaterialTheme.colorScheme.surfaceVariant
+    else MaterialTheme.colorScheme.surfaceContainerHigh
+}
+
+@Composable
 fun SettingsScreen(
     onBack: () -> Unit,
     onCustomPathConfirm: (String) -> Unit = {},
-    onToggleMixWithOthers: (Boolean) -> Unit = {}
+    onToggleMixWithOthers: (Boolean) -> Unit = {},
+    onOpenMaterialSettings: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
@@ -95,6 +105,7 @@ fun SettingsScreen(
     val audioMixPrefs = remember { AudioMixPrefs.get(context) }
 
     val dynamicColorEnabled = themePrefs.dynamicColorEnabledState.value
+    val coverColorEnabled = themePrefs.coverColorEnabledState.value
     val themeColorIndex = themePrefs.themeColorIndexState.value
     val currentLangCode = localePrefs.languageCodeState.value
 
@@ -230,9 +241,10 @@ fun SettingsScreen(
                 .clickable { showLanguagePicker = true },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -263,9 +275,10 @@ fun SettingsScreen(
                 .clickable { onCustomPathClick() },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -289,15 +302,52 @@ fun SettingsScreen(
             }
         }
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .clickable { onOpenMaterialSettings() },
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = settingsCardColor()
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Palette,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    Text(
+                        text = Strings.get("settings_material_settings"),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -329,16 +379,64 @@ fun SettingsScreen(
             }
         }
 
+        val coverCardAlpha = if (dynamicColorEnabled) 0.4f else 1f
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 6.dp)
+                .alpha(coverCardAlpha),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = settingsCardColor()
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = Strings.get("settings_cover_color"),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = Strings.get("settings_cover_color_desc"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Switch(
+                    checked = coverColorEnabled,
+                    enabled = !dynamicColorEnabled,
+                    onCheckedChange = { newValue ->
+                        if (!dynamicColorEnabled) {
+                            themePrefs.coverColorEnabled = newValue
+                        }
+                    }
+                )
+            }
+        }
+
         if (dynamicColorSupported) {
+            val dynamicCardAlpha = if (coverColorEnabled) 0.4f else 1f
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .alpha(dynamicCardAlpha),
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = mineCardColor()
+                    containerColor = settingsCardColor()
                 ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
             ) {
                 Row(
                     modifier = Modifier
@@ -362,15 +460,18 @@ fun SettingsScreen(
                     }
                     Switch(
                         checked = dynamicColorEnabled,
+                        enabled = !coverColorEnabled,
                         onCheckedChange = { newValue ->
-                            themePrefs.dynamicColorEnabled = newValue
+                            if (!coverColorEnabled) {
+                                themePrefs.dynamicColorEnabled = newValue
+                            }
                         }
                     )
                 }
             }
         }
 
-        val themeColorCardAlpha = if (dynamicColorEnabled) 0.4f else 1f
+        val themeColorCardAlpha = if (dynamicColorEnabled || coverColorEnabled) 0.4f else 1f
 
         Card(
             modifier = Modifier
@@ -379,9 +480,10 @@ fun SettingsScreen(
                 .alpha(themeColorCardAlpha),
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Column(
                 modifier = Modifier
@@ -418,9 +520,9 @@ fun SettingsScreen(
                         ColorBall(
                             color = preset.swatch,
                             isSelected = isSelected,
-                            enabled = !dynamicColorEnabled,
+                            enabled = !dynamicColorEnabled && !coverColorEnabled,
                             onClick = {
-                                if (!dynamicColorEnabled) {
+                                if (!dynamicColorEnabled && !coverColorEnabled) {
                                     themePrefs.themeColorIndex = index
                                 }
                             }
@@ -449,9 +551,10 @@ fun SettingsScreen(
                 },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -493,9 +596,10 @@ fun SettingsScreen(
                 },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -544,9 +648,10 @@ fun SettingsScreen(
                 },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -585,9 +690,10 @@ fun SettingsScreen(
                 },
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(
-                containerColor = mineCardColor()
+                containerColor = settingsCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier

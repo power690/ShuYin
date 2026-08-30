@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -62,7 +63,9 @@ import kotlinx.coroutines.withContext
 
 @Composable
 private fun mineCardColor(): Color {
-    return MaterialTheme.colorScheme.surfaceContainer
+    val isLight = MaterialTheme.colorScheme.surface.luminance() >= 0.5f
+    return if (isLight) MaterialTheme.colorScheme.surfaceVariant
+    else MaterialTheme.colorScheme.surfaceContainerHigh
 }
 
 @Composable
@@ -114,7 +117,8 @@ fun MineScreen(
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -174,7 +178,8 @@ fun MineScreen(
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -207,7 +212,8 @@ fun MineScreen(
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier
@@ -240,7 +246,8 @@ fun MineScreen(
             colors = CardDefaults.cardColors(
                 containerColor = mineCardColor()
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
             Row(
                 modifier = Modifier

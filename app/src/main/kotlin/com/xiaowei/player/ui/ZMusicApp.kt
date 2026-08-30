@@ -26,10 +26,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -74,6 +71,7 @@ import com.xiaowei.player.ui.screens.RecommendDetailScreen
 import com.xiaowei.player.ui.screens.RecommendScreen
 import com.xiaowei.player.ui.screens.SearchScreen
 import com.xiaowei.player.ui.screens.SettingsScreen
+import com.xiaowei.player.ui.screens.MaterialSettingsScreen
 import kotlinx.coroutines.launch
 import kotlin.math.pow
 
@@ -92,6 +90,7 @@ sealed class Detail {
     object Search : Detail()
     object Favorite : Detail()
     object Settings : Detail()
+    object MaterialSettings : Detail()
     object LyricSynth : Detail()
     object None : Detail()
 }
@@ -124,13 +123,13 @@ fun ShuYinApp(
 
     var displayedDetail by remember { mutableStateOf<Detail>(Detail.None) }
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
+    var lastSong by remember { mutableStateOf<com.xiaowei.player.data.Song?>(null) }
 
     val enterProgress = remember { Animatable(0f) }
     val playerEnterProgress = remember { Animatable(0f) }
 
     val supportsBlur = remember { supportsHardwareBlur }
 
-    val useLiquidGlass = LiquidGlassEnabled
     val contentBackdrop = rememberLayerBackdrop()
     val permBackdrop = rememberLayerBackdrop()
 
@@ -184,6 +183,10 @@ fun ShuYinApp(
 
     val context = androidx.compose.ui.platform.LocalContext.current
 
+    val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
+    val userMaterialStyle by themePrefs.materialStyleState
+    val materialFrosted = userMaterialStyle == com.xiaowei.player.data.ThemePrefs.MATERIAL_STYLE_FROSTED
+
     val customPathPrefs = remember { com.xiaowei.player.data.CustomPathPrefs.get(context) }
     val hasCustomPath = customPathPrefs.pathState.value.trim().isNotEmpty()
     val hasManagePerm = remember(hasCustomPath) {
@@ -225,7 +228,29 @@ fun ShuYinApp(
     val mainScope = rememberCoroutineScope()
 
     val currentSong = playerState.currentSong
+    LaunchedEffect(currentSong) {
+        if (currentSong != null) {
+            lastSong = currentSong
+        } else if (playerExpanded) {
+            playerExpanded = false
+        }
+    }
     val inDetail = displayedDetail != Detail.None
+
+    val coverColorEnabled = themePrefs.coverColorEnabledState.value
+    LaunchedEffect(currentSong?.albumArtUri, coverColorEnabled) {
+        if (!coverColorEnabled) {
+            themePrefs.coverColor = null
+            return@LaunchedEffect
+        }
+        val uri = currentSong?.albumArtUri
+        if (uri == null) {
+            themePrefs.coverColor = null
+        } else {
+            val seedLong = com.xiaowei.player.ui.theme.ThemeColorUtil.extractFromUri(context, uri)
+            themePrefs.coverColor = seedLong?.toInt()
+        }
+    }
 
     BackHandler(enabled = playerExpanded) {
         playerExpanded = false
@@ -264,11 +289,8 @@ fun ShuYinApp(
         val systemNavBarHeight = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
         val showMiniPlayer = currentSong != null && !playerExpanded && !inDetail
-        val bottomReserved: Dp = if (useLiquidGlass) {
+        val bottomReserved: Dp =
             systemNavBarHeight + (if (showMiniPlayer) 176.dp else 90.dp)
-        } else {
-            navBarHeight + (if (showMiniPlayer) 80.dp else 0.dp)
-        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -281,52 +303,28 @@ fun ShuYinApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(
-                                    if (useLiquidGlass) Modifier.layerBackdrop(permBackdrop)
-                                    else Modifier
-                                )
+                                .layerBackdrop(permBackdrop)
                         ) {
                             NoPermissionScreen(onRequest = onRefresh)
                         }
 
                         if (!playerExpanded) {
-                            if (useLiquidGlass) {
-                                LiquidGlassNavBar(
-                                    backdrop = permBackdrop,
-                                    tabs = tabs.map { it.icon to it.labelKey },
-                                    selectedTabIndex = { mainPagerState.currentPage },
-                                    onTabSelected = { index ->
-                                        if (mainPagerState.currentPage != index) {
-                                            mainScope.launch {
-                                                mainPagerState.animateScrollToPage(index)
-                                            }
+                            LiquidGlassNavBar(
+                                backdrop = permBackdrop,
+                                tabs = tabs.map { it.icon to it.labelKey },
+                                selectedTabIndex = { mainPagerState.targetPage },
+                                onTabSelected = { index ->
+                                    if (mainPagerState.currentPage != index) {
+                                        mainScope.launch {
+                                            mainPagerState.animateScrollToPage(index)
                                         }
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarHeight + 24.dp)
-                                )
-                            } else {
-                                NavigationBar(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                ) {
-                                    tabs.forEach { tab ->
-                                        NavigationBarItem(
-                                            selected = mainPagerState.currentPage == tab.ordinal,
-                                            onClick = {
-                                                if (mainPagerState.currentPage != tab.ordinal) {
-                                                    mainScope.launch {
-                                                        mainPagerState.animateScrollToPage(tab.ordinal)
-                                                    }
-                                                }
-                                            },
-                                            icon = { Icon(tab.icon, contentDescription = null) },
-                                            label = { Text(Strings.get(tab.labelKey)) }
-                                        )
                                     }
-                                }
-                            }
+                                },
+                                forceFrosted = materialFrosted,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = systemNavBarHeight + 24.dp)
+                            )
                         }
                     }
                 }
@@ -358,10 +356,7 @@ fun ShuYinApp(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .then(
-                                    if (useLiquidGlass) Modifier.layerBackdrop(contentBackdrop)
-                                    else Modifier
-                                )
+                                .layerBackdrop(contentBackdrop)
                         ) {
                             HorizontalPager(
                                 state = mainPagerState,
@@ -423,7 +418,7 @@ fun ShuYinApp(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
                                     .padding(
-                                        bottom = if (useLiquidGlass) systemNavBarHeight + 94.dp else navBarHeight
+                                        bottom = systemNavBarHeight + 94.dp
                                     )
                             ) {
                                 MiniPlayerBar(
@@ -436,56 +431,32 @@ fun ShuYinApp(
                                     onNext = onSkipNext,
                                     onSeek = onSeek,
                                     onClick = { playerExpanded = true },
-                                    glassBackdrop = if (useLiquidGlass) contentBackdrop else null
+                                    glassBackdrop = contentBackdrop,
+                                    forceFrosted = materialFrosted
                                 )
                             }
                         }
 
                         if (!playerExpanded) {
-                            if (useLiquidGlass) {
-                                LiquidGlassNavBar(
-                                    backdrop = contentBackdrop,
-                                    tabs = tabs.map { it.icon to it.labelKey },
-                                    selectedTabIndex = { mainPagerState.currentPage },
-                                    onTabSelected = { index ->
-                                        if (mainPagerState.currentPage != index) {
-                                            mainScope.launch {
-                                                mainPagerState.animateScrollToPage(index)
-                                            }
+                            LiquidGlassNavBar(
+                                backdrop = contentBackdrop,
+                                tabs = tabs.map { it.icon to it.labelKey },
+                                selectedTabIndex = { mainPagerState.targetPage },
+                                onTabSelected = { index ->
+                                    if (mainPagerState.currentPage != index) {
+                                        mainScope.launch {
+                                            mainPagerState.animateScrollToPage(index)
                                         }
-                                        if (detail != Detail.None) {
-                                            popDetail()
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.BottomCenter)
-                                        .padding(bottom = systemNavBarHeight + 24.dp)
-                                )
-                            } else {
-                                NavigationBar(
-                                    containerColor = MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                ) {
-                                    Tab.values().forEach { tab ->
-                                        NavigationBarItem(
-                                            selected = mainPagerState.currentPage == tab.ordinal,
-                                            onClick = {
-
-                                                if (mainPagerState.currentPage != tab.ordinal) {
-                                                    mainScope.launch {
-                                                        mainPagerState.animateScrollToPage(tab.ordinal)
-                                                    }
-                                                }
-                                                if (detail != Detail.None) {
-                                                    popDetail()
-                                                }
-                                            },
-                                            icon = { Icon(tab.icon, contentDescription = null) },
-                                            label = { Text(Strings.get(tab.labelKey)) }
-                                        )
                                     }
-                                }
-                            }
+                                    if (detail != Detail.None) {
+                                        popDetail()
+                                    }
+                                },
+                                forceFrosted = materialFrosted,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = systemNavBarHeight + 24.dp)
+                            )
                         }
                     }
 
@@ -568,7 +539,11 @@ fun ShuYinApp(
                                                 .updateAudioFocusHandling(mix)
                                         } catch (_: Exception) {
                                         }
-                                    }
+                                    },
+                                    onOpenMaterialSettings = { requestDetail(Detail.MaterialSettings) }
+                                )
+                                Detail.MaterialSettings -> MaterialSettingsScreen(
+                                    onBack = { popDetail() }
                                 )
                                 Detail.LyricSynth -> LyricSynthScreen(
                                     onBack = { popDetail() }
@@ -599,6 +574,25 @@ fun ShuYinApp(
                 }
         ) {
             currentSong?.let { song ->
+                PlayerScreen(
+                    song = song,
+                    playerState = playerState,
+                    playlist = playerPlaylist,
+                    isFavorite = library.favoriteIds.contains(song.id),
+                    onToggleFavorite = { onToggleFavorite(song.id) },
+                    onTogglePlayPause = onTogglePlayPause,
+                    onNext = onSkipNext,
+                    onPrev = onSkipPrev,
+                    onSeek = onSeek,
+                    onCyclePlayMode = onCyclePlayMode,
+                    onPlayAtIndex = onPlayAtIndex,
+                    onRemoveFromQueue = onRemoveFromQueue,
+                    onClearQueue = onClearQueue,
+                    onMinimize = { playerExpanded = false },
+                    floatingLyricEnabled = floatingLyricEnabled,
+                    onToggleFloatingLyric = onToggleFloatingLyric
+                )
+            } ?: lastSong?.let { song ->
                 PlayerScreen(
                     song = song,
                     playerState = playerState,

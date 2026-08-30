@@ -202,6 +202,7 @@ class MusicPlayerManager(
 
         if (playlist.isEmpty()) {
             _state.update { it.copy(currentSong = null, currentIndex = -1) }
+            savePlaybackStateSnapshot(positionMs = 0L)
             return
         }
 
@@ -222,6 +223,8 @@ class MusicPlayerManager(
             player.prepare()
             player.playWhenReady = true
         }
+
+        savePlaybackStateSnapshot(positionMs = player.currentPosition)
     }
 
     fun clearQueue() {
@@ -229,6 +232,7 @@ class MusicPlayerManager(
         player.stop()
         playlist = emptyList()
         _state.update { it.copy(currentSong = null, currentIndex = -1, isPlaying = false) }
+        playbackPrefs?.clearSync()
     }
 
     fun togglePlayPause() {
