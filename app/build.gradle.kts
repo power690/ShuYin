@@ -13,8 +13,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 12
-        versionName = "1.5.0"
+        versionCode = 13
+        versionName = "1.6.0"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -105,6 +105,8 @@ dependencies {
     implementation(libs.hehang.flac.extension)
     implementation(libs.okhttp)
     implementation(libs.backdrop)
+    implementation(libs.material.kolor)
+    implementation(libs.androidx.palette.ktx)
 
     debugImplementation(libs.androidx.ui.tooling)
 }

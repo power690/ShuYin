@@ -496,4 +496,4 @@ val PRESET_THEME_COLORS = listOf(
     ),
 )
 
-const val DEFAULT_THEME_COLOR_INDEX = 0
+const val DEFAULT_THEME_COLOR_INDEX = 1

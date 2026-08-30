@@ -34,13 +34,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.kyant.backdrop.Backdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
@@ -65,25 +65,23 @@ fun MiniPlayerBar(
     onNext: () -> Unit,
     onSeek: (Long) -> Unit,
     onClick: () -> Unit,
-    glassBackdrop: Backdrop? = null
+    glassBackdrop: Backdrop? = null,
+    forceFrosted: Boolean = false
 ) {
 
     if (glassBackdrop != null && LiquidGlassEnabled) {
-        val glassShape = RoundedCornerShape(26.dp)
+        val glassShape = RoundedCornerShape(30.dp)
+        val fullEffects = !forceFrosted && LiquidGlassFullEffects
+        val midEffects = forceFrosted || LiquidGlassMidEffects
         val surfaceColor =
-            if (LiquidGlassFullEffects) {
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
-            } else if (LiquidGlassMidEffects) {
-                MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+            if (LiquidGlassMidEffects) {
+                if (fullEffects) {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                }
             } else {
-                val base =
-                    if (MaterialTheme.colorScheme.surface.luminance() >= 0.5f) Color(0xFFFAFAFA)
-                    else Color(0xFF121212)
-                lerp(
-                    base,
-                    MaterialTheme.colorScheme.primary,
-                    if (MaterialTheme.colorScheme.surface.luminance() >= 0.5f) 0.10f else 0.12f
-                )
+                MaterialTheme.colorScheme.surface
             }
         Column(
             modifier = Modifier
@@ -94,8 +92,8 @@ fun MiniPlayerBar(
                     shape = { glassShape },
                     effects = {
                         vibrancy()
-                        blur(if (LiquidGlassFullEffects) 8.dp.toPx() else 14.dp.toPx())
-                        if (LiquidGlassFullEffects) {
+                        blur(if (fullEffects) 8.dp.toPx() else 14.dp.toPx())
+                        if (fullEffects) {
                             lens(
                                 24.dp.toPx(),
                                 24.dp.toPx(),
@@ -196,7 +194,7 @@ private fun MiniPlayerContent(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 14.dp, bottom = 4.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 13.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumCover(
@@ -251,7 +249,7 @@ private fun MiniPlayerContent(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 22.dp)
-            .height(20.dp)
+            .height(14.dp)
             .pointerInput(durationMs) {
                 if (durationMs <= 0) return@pointerInput
 

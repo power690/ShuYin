@@ -36,9 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -85,24 +83,22 @@ fun LiquidGlassNavBar(
     tabs: List<Pair<ImageVector, String>>,
     selectedTabIndex: () -> Int,
     onTabSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    forceFrosted: Boolean = false
 ) {
     val barShape = RoundedCornerShape(30.dp)
     val pillShape = RoundedCornerShape(26.dp)
     val isLightTheme = MaterialTheme.colorScheme.surface.luminance() >= 0.5f
-    val accentColor = MaterialTheme.colorScheme.primary
     val contentColor = if (isLightTheme) Color.Black else Color.White
-    val selectedContentColor = if (LiquidGlassFullEffects) contentColor else accentColor
+    val fullEffects = !forceFrosted && LiquidGlassFullEffects
+    val midEffects = forceFrosted || LiquidGlassMidEffects
+    val selectedContentColor = contentColor
     val containerColor =
-        if (LiquidGlassFullEffects) {
+        if (LiquidGlassMidEffects) {
             if (isLightTheme) Color(0xFFFAFAFA).copy(0.55f)
             else Color(0xFF121212).copy(0.60f)
-        } else if (LiquidGlassMidEffects) {
-            if (isLightTheme) Color(0xFFFAFAFA).copy(0.72f)
-            else Color(0xFF121212).copy(0.75f)
         } else {
-            if (isLightTheme) lerp(Color(0xFFFAFAFA), accentColor, 0.10f)
-            else lerp(Color(0xFF121212), accentColor, 0.12f)
+            MaterialTheme.colorScheme.surface
         }
 
     val tabsBackdrop = rememberLayerBackdrop()
@@ -136,7 +132,7 @@ fun LiquidGlassNavBar(
                 valueRange = 0f..(tabs.size - 1).toFloat(),
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
-                pressedScale = 56f / 54f,
+                pressedScale = 66f / 54f,
                 onDragStarted = {},
                 onDragStopped = {
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabs.size - 1)
@@ -145,7 +141,7 @@ fun LiquidGlassNavBar(
                     animationScope.launch {
                         offsetAnimation.animateTo(
                             0f,
-                            spring(1f, 300f, 0.5f)
+                            spring(0.55f, 480f, 0.5f)
                         )
                     }
                 },
@@ -214,8 +210,8 @@ fun LiquidGlassNavBar(
                     shape = { barShape },
                     effects = {
                         vibrancy()
-                        blur(if (LiquidGlassFullEffects) 8.dp.toPx() else 14.dp.toPx())
-                        if (LiquidGlassFullEffects) {
+                        blur(if (fullEffects) 8.dp.toPx() else 14.dp.toPx())
+                        if (fullEffects) {
                             lens(24.dp.toPx(), 24.dp.toPx())
                         }
                     },
@@ -254,8 +250,8 @@ fun LiquidGlassNavBar(
                         effects = {
                             val progress = dampedDragAnimation.pressProgress
                             vibrancy()
-                            blur(if (LiquidGlassFullEffects) 8.dp.toPx() else 14.dp.toPx())
-                            if (LiquidGlassFullEffects) {
+                            blur(if (fullEffects) 8.dp.toPx() else 14.dp.toPx())
+                            if (fullEffects) {
                                 lens(24.dp.toPx() * progress, 24.dp.toPx() * progress)
                             }
                         },
@@ -268,8 +264,7 @@ fun LiquidGlassNavBar(
                     .then(interactiveHighlight.modifier)
                     .height(54.dp)
                     .fillMaxWidth()
-                    .padding(horizontal = 4.dp)
-                    .graphicsLayer(colorFilter = ColorFilter.tint(accentColor)),
+                    .padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 content = tabsContent
             )
@@ -290,13 +285,13 @@ fun LiquidGlassNavBar(
                     shape = { pillShape },
                     effects = {
                         val progress = dampedDragAnimation.pressProgress
-                        if (LiquidGlassFullEffects) {
+                        if (fullEffects) {
                             lens(
                                 10.dp.toPx() * progress,
                                 14.dp.toPx() * progress,
                                 chromaticAberration = true
                             )
-                        } else if (LiquidGlassMidEffects) {
+                        } else if (midEffects) {
                             vibrancy()
                         }
                     },
@@ -324,32 +319,12 @@ fun LiquidGlassNavBar(
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
-                        if (LiquidGlassFullEffects) {
-                            drawRect(
-                                if (isLightTheme) Color.Black.copy(0.1f)
-                                else Color.White.copy(0.1f),
-                                alpha = 1f - progress
-                            )
-                            drawRect(Color.Black.copy(alpha = 0.03f * progress))
-                        } else if (LiquidGlassMidEffects) {
-                            drawRect(
-                                Brush.verticalGradient(
-                                    0.0f to Color.White.copy(alpha = 0.20f),
-                                    0.5f to accentColor.copy(alpha = 0.10f),
-                                    1.0f to accentColor.copy(alpha = 0.22f)
-                                )
-                            )
-                            drawRect(Color.Black.copy(alpha = 0.04f * progress))
-                        } else {
-                            drawRect(
-                                Brush.verticalGradient(
-                                    0.0f to Color.White.copy(alpha = 0.22f),
-                                    0.5f to accentColor.copy(alpha = 0.16f),
-                                    1.0f to accentColor.copy(alpha = 0.30f)
-                                )
-                            )
-                            drawRect(Color.Black.copy(alpha = 0.04f * progress))
-                        }
+                        drawRect(
+                            if (isLightTheme) Color.Black.copy(0.1f)
+                            else Color.White.copy(0.1f),
+                            alpha = 1f - progress
+                        )
+                        drawRect(Color.Black.copy(alpha = 0.03f * progress))
                     }
                 )
                 .height(54.dp)

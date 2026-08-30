@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
+import com.materialkolor.rememberDynamicColorScheme
 import com.xiaowei.player.data.ThemePrefs
 
 private val LightColors = lightColorScheme(
@@ -73,11 +74,15 @@ fun ZMusicTheme(
 
     val dynamicColorEnabled = themePrefs.dynamicColorEnabledState.value
     val themeColorIndex = themePrefs.themeColorIndexState.value
+    val coverColorEnabled = themePrefs.coverColorEnabledState.value
+    val coverColor = themePrefs.coverColorState.value
 
     val colorScheme = rememberZMusicColorScheme(
         darkTheme = darkTheme,
         dynamicColorEnabled = dynamicColorEnabled,
-        themeColorIndex = themeColorIndex
+        themeColorIndex = themeColorIndex,
+        coverColorEnabled = coverColorEnabled,
+        coverColor = coverColor
     )
 
     val view = LocalView.current
@@ -108,10 +113,22 @@ fun ZMusicTheme(
 fun rememberZMusicColorScheme(
     darkTheme: Boolean,
     dynamicColorEnabled: Boolean,
-    themeColorIndex: Int
+    themeColorIndex: Int,
+    coverColorEnabled: Boolean = false,
+    coverColor: Int? = null
 ): androidx.compose.material3.ColorScheme {
     val context = LocalContext.current
     return when {
+
+        coverColorEnabled -> {
+            if (coverColor != null) {
+                rememberDynamicColorScheme(seedColor = Color(coverColor), isDark = darkTheme)
+            } else {
+                val preset = PRESET_THEME_COLORS.getOrElse(themeColorIndex) { PRESET_THEME_COLORS[DEFAULT_THEME_COLOR_INDEX] }
+                if (darkTheme) buildDarkColorSchemeFromPreset(preset)
+                else buildLightColorSchemeFromPreset(preset)
+            }
+        }
 
         dynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
