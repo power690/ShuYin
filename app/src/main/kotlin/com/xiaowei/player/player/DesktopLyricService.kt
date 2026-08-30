@@ -243,6 +243,10 @@ class DesktopLyricService : Service() {
 
     private fun currentThemePrimaryColor(): Int {
         val themePrefs = com.xiaowei.player.data.ThemePrefs.get(this)
+        val cached = themePrefs.lastPrimaryColor
+        if (cached != com.xiaowei.player.data.ThemePrefs.DEFAULT_PRIMARY_COLOR) {
+            return cached
+        }
         val isDark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK ==
                 Configuration.UI_MODE_NIGHT_YES
         if (themePrefs.dynamicColorEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -426,7 +430,9 @@ class DesktopLyricService : Service() {
                 val colorScheme = rememberZMusicColorScheme(
                     darkTheme = isDark,
                     dynamicColorEnabled = themePrefs.dynamicColorEnabled,
-                    themeColorIndex = themePrefs.themeColorIndex
+                    themeColorIndex = themePrefs.themeColorIndex,
+                    coverColorEnabled = themePrefs.coverColorEnabled,
+                    coverColor = themePrefs.coverColor
                 )
                 MaterialTheme(colorScheme = colorScheme) {
                     Box(
