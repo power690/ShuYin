@@ -166,8 +166,8 @@ fun UpdateDialog(
             modifier = Modifier
                 .padding(horizontal = 32.dp)
                 .fillMaxWidth(),
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             shadowElevation = 8.dp
         ) {
             Column(

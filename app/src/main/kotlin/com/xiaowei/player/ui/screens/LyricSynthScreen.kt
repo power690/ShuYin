@@ -120,12 +120,12 @@ fun LyricSynthScreen(onBack: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .statusBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -198,7 +198,7 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                             .fillMaxWidth()
                             .padding(12.dp),
                         shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surface,
+                        color = MaterialTheme.colorScheme.surfaceContainer,
                         shadowElevation = 4.dp
                     ) {
                         Button(
@@ -267,7 +267,7 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                     .padding(horizontal = 40.dp)
                     .fillMaxWidth(),
                 shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shadowElevation = 8.dp
             ) {
                 Column(

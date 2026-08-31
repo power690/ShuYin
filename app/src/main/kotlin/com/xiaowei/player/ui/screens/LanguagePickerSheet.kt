@@ -102,7 +102,7 @@ fun LanguagePickerSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         scrimColor = Color.Black.copy(alpha = 0.5f),
         dragHandle = null  
     ) {

@@ -1,5 +1,11 @@
 package com.xiaowei.player.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -29,11 +35,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -51,8 +61,60 @@ import com.kyant.backdrop.shadow.InnerShadow
 import com.kyant.backdrop.shadow.Shadow
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.ui.components.AlbumCover
+import com.xiaowei.player.ui.glass.inspectDragGestures
 import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.abs
+
+private fun Modifier.miniPlayerStretch(
+    stretchOffset: Animatable<Offset, AnimationVector2D>,
+    stretchScope: CoroutineScope,
+    stretchSpring: SpringSpec<Offset>
+): Modifier = this
+    .graphicsLayer {
+        val oy = stretchOffset.value.y
+        val growY = (abs(oy) / (density * 26f)).coerceIn(0f, 0.35f)
+        translationY = oy * 0.3f
+        scaleY = 1f + growY
+        transformOrigin = TransformOrigin(0.5f, if (oy >= 0f) 0f else 1f)
+    }
+    .pointerInput(Unit) {
+        var skipStretch = false
+        val progressZone = 24.dp.toPx()
+        inspectDragGestures(
+            directionalLock = true,
+            onDragStart = { down ->
+                skipStretch = down.position.y > size.height - progressZone
+            },
+            onDragEnd = {
+                if (!skipStretch) {
+                    stretchScope.launch {
+                        stretchOffset.animateTo(Offset.Zero, stretchSpring)
+                    }
+                }
+            },
+            onDragCancel = {
+                if (!skipStretch) {
+                    stretchScope.launch {
+                        stretchOffset.animateTo(Offset.Zero, stretchSpring)
+                    }
+                }
+            }
+        ) { _, dragAmount ->
+            if (skipStretch) return@inspectDragGestures
+            val maxY = 44.dp.toPx()
+            val vy = stretchOffset.value.y + dragAmount.y
+            val next = Offset(
+                0f,
+                maxY * vy / (maxY + abs(vy))
+            )
+            stretchScope.launch {
+                stretchOffset.snapTo(next)
+            }
+        }
+    }
 
 @Composable
 fun MiniPlayerBar(
@@ -73,6 +135,19 @@ fun MiniPlayerBar(
         val glassShape = RoundedCornerShape(30.dp)
         val fullEffects = !forceFrosted && LiquidGlassFullEffects
         val midEffects = forceFrosted || LiquidGlassMidEffects
+        val stretchOffset = remember {
+            Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+        }
+        val stretchScope = rememberCoroutineScope()
+        val stretchSpring = spring(
+            dampingRatio = 0.3f,
+            stiffness = 380f,
+            visibilityThreshold = Offset.VisibilityThreshold
+        )
+        val openPlayer = {
+            stretchScope.launch { stretchOffset.snapTo(Offset.Zero) }
+            onClick()
+        }
         val surfaceColor =
             if (LiquidGlassMidEffects) {
                 if (fullEffects) {
@@ -87,6 +162,7 @@ fun MiniPlayerBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
+                .miniPlayerStretch(stretchOffset, stretchScope, stretchSpring)
                 .drawBackdrop(
                     backdrop = glassBackdrop,
                     shape = { glassShape },
@@ -113,7 +189,7 @@ fun MiniPlayerBar(
                     },
                     onDrawSurface = { drawRect(surfaceColor) }
                 )
-                .clickable(onClick = onClick)
+                .clickable(onClick = openPlayer)
         ) {
             MiniPlayerContent(
                 song = song,
@@ -127,6 +203,15 @@ fun MiniPlayerBar(
             )
         }
     } else {
+        val stretchOffset = remember {
+            Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+        }
+        val stretchScope = rememberCoroutineScope()
+        val stretchSpring = spring(
+            dampingRatio = 0.3f,
+            stiffness = 380f,
+            visibilityThreshold = Offset.VisibilityThreshold
+        )
         Surface(
             tonalElevation = 1.dp,
             color = MaterialTheme.colorScheme.surface
@@ -134,6 +219,7 @@ fun MiniPlayerBar(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .miniPlayerStretch(stretchOffset, stretchScope, stretchSpring)
                     .clickable(onClick = onClick)
             ) {
                 MiniPlayerContent(

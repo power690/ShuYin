@@ -1,14 +1,22 @@
 package com.xiaowei.player.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -17,25 +25,27 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import com.xiaowei.player.LibraryState
-import com.xiaowei.player.R
 import com.xiaowei.player.data.Song
+import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.SongRow
 import kotlinx.coroutines.launch
-import com.xiaowei.player.i18n.Strings
 
 private enum class LibraryTab(val labelKey: String) {
     Songs("library_songs"),
@@ -58,7 +68,7 @@ fun LibraryScreen(
 
     bottomPadding: Dp = 168.dp
 ) {
-    val tabs = LibraryTab.values()
+    val tabs = LibraryTab.entries
 
     val pagerState = rememberPagerState(initialPage = initialPage) { tabs.size }
     LaunchedEffect(pagerState.currentPage) {
@@ -69,15 +79,14 @@ fun LibraryScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -89,10 +98,9 @@ fun LibraryScreen(
             )
         }
 
-        TabRow(
+        PrimaryTabRow(
             selectedTabIndex = pagerState.currentPage,
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.primary
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             tabs.forEachIndexed { i, tab ->
                 Tab(
@@ -202,14 +210,17 @@ private fun ArtistsPane(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 150.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding)
     ) {
         items(
             items = artists,
             key = { it.id },
             contentType = { "artist_tile" }
         ) { artist ->
-            ArtistTile(artist = artist, onClick = { onOpenArtist(artist.displayName) })
+            LibraryArtistTile(
+                artist = artist,
+                onClick = { onOpenArtist(artist.displayName) }
+            )
         }
     }
 }
@@ -238,14 +249,107 @@ private fun AlbumsPane(
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 150.dp),
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = bottomPadding)
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding)
     ) {
         items(
             items = albums,
             key = { it.id },
             contentType = { "album_tile" }
         ) { album ->
-            AlbumTile(album = album, onClick = { onOpenAlbum(album.id) })
+            LibraryAlbumTile(
+                album = album,
+                onClick = { onOpenAlbum(album.id) }
+            )
         }
+    }
+}
+
+@Composable
+fun LibraryArtistTile(
+    artist: com.xiaowei.player.data.Artist,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "libraryArtistTileScale"
+    )
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            )
+            .padding(4.dp)
+    ) {
+        com.xiaowei.player.ui.components.AlbumCover(
+            coverUri = artist.albumArtUri,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp),
+            cornerRadius = 16,
+            filePath = artist.firstSongData
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = artist.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            fontWeight = FontWeight.Medium
+        )
+    }
+}
+
+@Composable
+fun LibraryAlbumTile(
+    album: com.xiaowei.player.data.Album,
+    onClick: () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "libraryAlbumTileScale"
+    )
+    Column(
+        modifier = Modifier
+            .width(140.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            )
+            .padding(4.dp)
+    ) {
+        com.xiaowei.player.ui.components.AlbumCover(
+            coverUri = album.albumArtUri,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp),
+            cornerRadius = 16,
+            filePath = album.firstSongData
+        )
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = album.displayName,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
