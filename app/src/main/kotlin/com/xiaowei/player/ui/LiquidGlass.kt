@@ -3,6 +3,8 @@ package com.xiaowei.player.ui
 import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -37,6 +40,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -111,6 +115,7 @@ fun LiquidGlassNavBar(
         val tabWidth = with(density) {
             (constraints.maxWidth.toFloat() - 8.dp.toPx()) / tabs.size
         }
+        val maxStretchPx = with(density) { 22.dp.toPx() }
 
         val offsetAnimation = remember { Animatable(0f) }
         val panelOffset by remember(density) {
@@ -124,6 +129,17 @@ fun LiquidGlassNavBar(
 
         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
         val animationScope = rememberCoroutineScope()
+        val stretchOffset = remember {
+            Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
+        }
+        var virtualStretch by remember { mutableFloatStateOf(0f) }
+        var virtualStretchY by remember { mutableFloatStateOf(0f) }
+        val stretchScope = rememberCoroutineScope()
+        val stretchSpring = spring(
+            dampingRatio = 0.3f,
+            stiffness = 380f,
+            visibilityThreshold = Offset.VisibilityThreshold
+        )
         var currentIndex by remember { mutableIntStateOf(selectedTabIndex()) }
         val dampedDragAnimation = remember(animationScope) {
             DampedDragAnimation(
@@ -135,6 +151,8 @@ fun LiquidGlassNavBar(
                 pressedScale = 66f / 54f,
                 onDragStarted = {},
                 onDragStopped = {
+                    virtualStretch = 0f
+                    virtualStretchY = 0f
                     val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabs.size - 1)
                     currentIndex = targetIndex
                     animateToValue(targetIndex.toFloat())
@@ -144,12 +162,24 @@ fun LiquidGlassNavBar(
                             spring(0.55f, 480f, 0.5f)
                         )
                     }
+                    stretchScope.launch {
+                        stretchOffset.animateTo(Offset.Zero, stretchSpring)
+                    }
                 },
                 onDrag = { _, dragAmount ->
-                    updateValue(
-                        (targetValue + dragAmount.x / tabWidth * if (isLtr) 1f else -1f)
-                            .fastCoerceIn(0f, (tabs.size - 1).toFloat())
-                    )
+                    val delta = dragAmount.x / tabWidth * if (isLtr) 1f else -1f
+                    val virtual = targetValue + virtualStretch + delta
+                    val clamped = virtual.fastCoerceIn(0f, (tabs.size - 1).toFloat())
+                    val overflowPx = (virtual - clamped) * tabWidth
+                    val cappedPx = maxStretchPx * overflowPx / (maxStretchPx + abs(overflowPx))
+                    virtualStretch = cappedPx / tabWidth
+                    updateValue(clamped)
+                    virtualStretchY += dragAmount.y
+                    val cappedY = maxStretchPx * virtualStretchY / (maxStretchPx + abs(virtualStretchY))
+                    val stretchPx = cappedPx * (if (isLtr) 1f else -1f)
+                    stretchScope.launch {
+                        stretchOffset.snapTo(Offset(stretchPx, cappedY))
+                    }
                     animationScope.launch {
                         offsetAnimation.snapTo(offsetAnimation.value + dragAmount.x)
                     }
@@ -177,10 +207,12 @@ fun LiquidGlassNavBar(
             InteractiveHighlight(
                 animationScope = animationScope,
                 position = { size, _ ->
+                    val spill = stretchOffset.value.x * 0.5f
+                    val spillY = stretchOffset.value.y * 0.5f
                     Offset(
-                        if (isLtr) (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset
-                        else size.width - (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset,
-                        size.height / 2f
+                        if (isLtr) (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset + spill
+                        else size.width - (dampedDragAnimation.value + 0.5f) * tabWidth + panelOffset + spill,
+                        size.height / 2f + spillY
                     )
                 }
             )
@@ -200,6 +232,35 @@ fun LiquidGlassNavBar(
             }
         }
 
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(62.dp)
+                .graphicsLayer {
+                    val ox = stretchOffset.value.x
+                    val oy = stretchOffset.value.y
+                    val growX = (abs(ox) / size.width).coerceIn(0f, 0.04f)
+                    val growY = (abs(oy) / (size.height * 1.1f)).coerceIn(0f, 0.32f)
+                    translationX = ox * 0.25f
+                    translationY = oy * 0.32f
+                    scaleX = (1f + growX) * (1f - growY * 0.45f)
+                    scaleY = (1f - growX * 2f) * (1f + growY)
+                    val horizontalDominant = abs(ox) > abs(oy)
+                    transformOrigin = TransformOrigin(
+                        when {
+                            horizontalDominant && ox >= 0f -> 0f
+                            horizontalDominant -> 1f
+                            else -> 0.5f
+                        },
+                        when {
+                            !horizontalDominant && oy >= 0f -> 0f
+                            !horizontalDominant -> 1f
+                            else -> 0.5f
+                        }
+                    )
+                },
+            contentAlignment = Alignment.CenterStart
+        ) {
         Row(
             Modifier
                 .graphicsLayer {
@@ -275,8 +336,10 @@ fun LiquidGlassNavBar(
                 .padding(horizontal = 4.dp)
                 .graphicsLayer {
                     translationX =
-                        if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset
-                        else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset
+                        (if (isLtr) dampedDragAnimation.value * tabWidth + panelOffset
+                        else size.width - (dampedDragAnimation.value + 1f) * tabWidth + panelOffset) +
+                                stretchOffset.value.x * 0.5f
+                    translationY = stretchOffset.value.y * 0.55f
                 }
                 .then(interactiveHighlight.gestureModifier)
                 .then(dampedDragAnimation.modifier)
@@ -316,6 +379,10 @@ fun LiquidGlassNavBar(
                         val velocity = dampedDragAnimation.velocity / 10f
                         scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.05f, 0.05f)
                         scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.05f, 0.05f)
+                        val stretchX = (abs(stretchOffset.value.x) / size.width).coerceIn(0f, 1f)
+                        val stretchY = (abs(stretchOffset.value.y) / size.height).coerceIn(0f, 1f)
+                        scaleX *= (1f + stretchX * 0.55f) * (1f - stretchY * 0.3f)
+                        scaleY *= (1f - stretchX * 0.28f) * (1f + stretchY * 0.5f)
                     },
                     onDrawSurface = {
                         val progress = dampedDragAnimation.pressProgress
@@ -330,6 +397,7 @@ fun LiquidGlassNavBar(
                 .height(54.dp)
                 .fillMaxWidth(1f / tabs.size)
         )
+        }
     }
 }
 

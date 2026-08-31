@@ -11,8 +11,25 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.util.fastFirstOrNull
+import kotlin.math.abs
 
 internal suspend fun PointerInputScope.inspectDragGestures(
+    onDragStart: (down: PointerInputChange) -> Unit = {},
+    onDragEnd: (change: PointerInputChange) -> Unit = {},
+    onDragCancel: () -> Unit = {},
+    onDrag: (change: PointerInputChange, dragAmount: Offset) -> Unit
+) {
+    inspectDragGestures(
+        directionalLock = false,
+        onDragStart = onDragStart,
+        onDragEnd = onDragEnd,
+        onDragCancel = onDragCancel,
+        onDrag = onDrag
+    )
+}
+
+internal suspend fun PointerInputScope.inspectDragGestures(
+    directionalLock: Boolean,
     onDragStart: (down: PointerInputChange) -> Unit = {},
     onDragEnd: (change: PointerInputChange) -> Unit = {},
     onDragCancel: () -> Unit = {},
@@ -24,12 +41,36 @@ internal suspend fun PointerInputScope.inspectDragGestures(
         val down = awaitFirstDown(false)
         val drag = initialDown
 
+        val slop = viewConfiguration.touchSlop
+        var lockAxis = 0
+        var accX = 0f
+        var accY = 0f
+
         onDragStart(down)
         onDrag(drag, Offset.Zero)
         val upEvent =
             drag(
                 pointerId = drag.id,
-                onDrag = { onDrag(it, it.positionChange()) }
+                onDrag = { change ->
+                    val delta = change.positionChange()
+                    if (!directionalLock) {
+                        onDrag(change, delta)
+                    } else {
+                        if (lockAxis == 0) {
+                            accX += delta.x
+                            accY += delta.y
+                            if (abs(accX) > slop || abs(accY) > slop) {
+                                lockAxis = if (abs(accX) * 1.2f >= abs(accY)) 1 else 2
+                            }
+                        }
+                        val filtered = when (lockAxis) {
+                            1 -> Offset(delta.x, 0f)
+                            2 -> Offset(0f, delta.y)
+                            else -> Offset.Zero
+                        }
+                        onDrag(change, filtered)
+                    }
+                }
             )
         if (upEvent == null) {
             onDragCancel()

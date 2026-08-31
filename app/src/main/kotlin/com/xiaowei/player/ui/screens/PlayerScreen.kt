@@ -82,6 +82,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -350,6 +352,18 @@ fun PlayerScreen(
                                             animatedVisibilityScope = this@AnimatedContent
                                         )
                                         .clip(RoundedCornerShape(20.dp))
+                                        .pointerInput(Unit) {
+                                            var totalDrag = 0f
+                                            detectHorizontalDragGestures(
+                                                onDragStart = { totalDrag = 0f },
+                                                onDragEnd = {
+                                                    if (totalDrag > 80f) showLyrics = true
+                                                }
+                                            ) { change, dragAmount ->
+                                                totalDrag += dragAmount
+                                                change.consume()
+                                            }
+                                        }
                                         .clickable(
                                             indication = null,
                                             interactionSource = remember { MutableInteractionSource() }
@@ -596,9 +610,10 @@ fun PlayerScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.45f)
+                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                     .background(
-                        MaterialTheme.colorScheme.surface,
-                        RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
+                        MaterialTheme.colorScheme.surfaceContainerLow,
+                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
                     )
                     .clickable(
                         indication = null,
@@ -694,6 +709,18 @@ private fun LyricsView(
     if (lines.isEmpty()) {
         Box(
             modifier = modifier
+                .pointerInput(Unit) {
+                    var totalDrag = 0f
+                    detectHorizontalDragGestures(
+                        onDragStart = { totalDrag = 0f },
+                        onDragEnd = {
+                            if (totalDrag < -80f) onToggle()
+                        }
+                    ) { change, dragAmount ->
+                        totalDrag += dragAmount
+                        change.consume()
+                    }
+                }
                 .clickable(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
@@ -721,6 +748,18 @@ private fun LyricsView(
 
     BoxWithConstraints(
         modifier = modifier
+            .pointerInput(Unit) {
+                var totalDrag = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onDragEnd = {
+                        if (totalDrag < -80f) onToggle()
+                    }
+                ) { change, dragAmount ->
+                    totalDrag += dragAmount
+                    change.consume()
+                }
+            }
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() }

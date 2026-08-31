@@ -93,7 +93,7 @@ fun EditProfileDialog(
                 .widthIn(max = 420.dp)
                 .fillMaxWidth(),
             shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surface,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
             shadowElevation = 8.dp
         ) {
             Column(

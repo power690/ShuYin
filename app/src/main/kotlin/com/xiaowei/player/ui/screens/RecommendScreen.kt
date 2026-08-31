@@ -1,7 +1,11 @@
 package com.xiaowei.player.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,6 +25,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -37,6 +43,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,11 +52,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
@@ -70,6 +79,8 @@ import com.xiaowei.player.ui.components.SongRow
 import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -92,15 +103,14 @@ fun RecommendScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -119,18 +129,34 @@ fun RecommendScreen(
         ) {
 
             item {
+                val searchInteraction = remember { MutableInteractionSource() }
+                val searchPressed by searchInteraction.collectIsPressedAsState()
+                val searchScale by animateFloatAsState(
+                    targetValue = if (searchPressed) 0.97f else 1f,
+                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+                    label = "homeSearchScale"
+                )
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .clickable(onClick = onOpenSearch),
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        .graphicsLayer {
+                            scaleX = searchScale
+                            scaleY = searchScale
+                        }
+                        .clickable(
+                            interactionSource = searchInteraction,
+                            indication = ripple(),
+                            onClick = onOpenSearch
+                        ),
+                    shape = RoundedCornerShape(28.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .height(56.dp)
+                            .padding(horizontal = 16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
@@ -152,34 +178,53 @@ fun RecommendScreen(
                 Text(
                     text = Strings.get("recommend_for_you"),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
                     fontWeight = FontWeight.Bold
                 )
             }
 
             item {
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(library.recommends, key = { it.title }) { card ->
-                    RecommendCardItem(
-                        card = card,
-                        onClick = { onOpenRecommendCard(card) }
-                    )
+                val recommendCount = library.recommends.size
+                val pagerState = rememberPagerState(pageCount = { recommendCount })
+                if (recommendCount > 1) {
+                    LaunchedEffect(pagerState) {
+                        snapshotFlow { pagerState.settledPage }.collectLatest {
+                            var elapsed = 0L
+                            while (elapsed < 3000) {
+                                if (pagerState.isScrollInProgress) elapsed = 0L
+                                delay(200)
+                                elapsed += 200
+                            }
+                            pagerState.animateScrollToPage((pagerState.currentPage + 1) % recommendCount)
+                        }
+                    }
                 }
-            }
+                Column {
+                    HorizontalPager(
+                        state = pagerState,
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        pageSpacing = 20.dp
+                    ) { page ->
+                        val card = library.recommends[page]
+                        RecommendCardItem(
+                            card = card,
+                            onClick = { onOpenRecommendCard(card) },
+                            fillWidth = true,
+                            cardHeight = 170
+                        )
+                    }
+                }
         }
 
         if (library.albums.isNotEmpty()) {
             item {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = Strings.get("recommend_hot_albums"),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -200,12 +245,12 @@ fun RecommendScreen(
 
         if (library.artists.isNotEmpty()) {
             item {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
                     text = Strings.get("library_artists"),
                     style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -234,13 +279,29 @@ private fun RecommendCardItem(
     fillWidth: Boolean = false,
     cardHeight: Int = 140
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "recommendCardScale"
+    )
     Card(
         modifier = Modifier
-            .then(if (fillWidth) Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp)
+            .then(if (fillWidth) Modifier.fillMaxWidth()
                   else Modifier.width(220.dp))
             .height(cardHeight.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            ),
+        shape = RoundedCornerShape(20.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -285,21 +346,36 @@ private fun RecommendCardItem(
 
 @Composable
 fun AlbumTile(album: Album, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "albumTileScale"
+    )
     Column(
         modifier = Modifier
-            .width(140.dp)
-            .clickable(onClick = onClick)
+            .width(128.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            )
             .padding(4.dp)
     ) {
         AlbumCover(
             coverUri = album.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp),
-            cornerRadius = 12,
+                .height(128.dp),
+            cornerRadius = 16,
             filePath = album.firstSongData
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(7.dp))
         Text(
             text = album.displayName,
             style = MaterialTheme.typography.bodyMedium,
@@ -320,21 +396,36 @@ fun AlbumTile(album: Album, onClick: () -> Unit) {
 
 @Composable
 fun ArtistTile(artist: Artist, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "artistTileScale"
+    )
     Column(
         modifier = Modifier
-            .width(140.dp)
-            .clickable(onClick = onClick)
+            .width(128.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            )
             .padding(4.dp)
     ) {
         AlbumCover(
             coverUri = artist.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp),
-            cornerRadius = 12,
+                .height(128.dp),
+            cornerRadius = 16,
             filePath = artist.firstSongData
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(7.dp))
         Text(
             text = artist.displayName,
             style = MaterialTheme.typography.bodyMedium,
@@ -360,13 +451,13 @@ fun RecommendDetailScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
                 .statusBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -395,12 +486,18 @@ fun RecommendDetailScreen(
         ) {
 
             item {
-                RecommendCardItem(
-                    card = card,
-                    onClick = { onPlayAll(songs, 0) },
-                    fillWidth = true,
-                    cardHeight = 220
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                ) {
+                    RecommendCardItem(
+                        card = card,
+                        onClick = { onPlayAll(songs, 0) },
+                        fillWidth = true,
+                        cardHeight = 220
+                    )
+                }
             }
             item { Spacer(Modifier.height(4.dp)) }
 
@@ -409,7 +506,7 @@ fun RecommendDetailScreen(
             Text(
                 text = Strings.get("recommend_songs"),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 fontWeight = FontWeight.Bold
             )
@@ -521,54 +618,60 @@ fun SearchScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
 
-        Row(
+        Surface(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface)
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHighest
         ) {
-            Icon(
-                imageVector = Icons.Filled.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(22.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            TextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier
-                    .weight(1f)
-                    .focusRequester(focusRequester),
-                placeholder = {
-                    Text(
-                        text = Strings.get("search_hint"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                },
-                singleLine = true,
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                textStyle = MaterialTheme.typography.bodyLarge
-            )
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { query = "" }) {
-                    Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = Strings.get("search_clear"),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .size(22.dp)
+                )
+                TextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
+                    placeholder = {
+                        Text(
+                            text = Strings.get("search_hint"),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        disabledContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    ),
+                    textStyle = MaterialTheme.typography.bodyLarge
+                )
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { query = "" }) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = Strings.get("search_clear"),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         }
@@ -591,7 +694,7 @@ fun SearchScreen(
                             Text(
                                 text = Strings.get("search_history"),
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onBackground,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.weight(1f)
                             )
@@ -632,7 +735,7 @@ fun SearchScreen(
                     Text(
                         text = Strings.get("search_hot"),
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onBackground,
+                        color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
@@ -704,10 +807,26 @@ fun SearchScreen(
 
 @Composable
 private fun SearchChip(text: String, onClick: () -> Unit) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "searchChipScale"
+    )
     Surface(
-        modifier = Modifier.clickable(onClick = onClick),
+        modifier = Modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            ),
         shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
+        color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
         Text(
             text = text,

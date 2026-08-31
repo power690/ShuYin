@@ -11,16 +11,18 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,8 +32,6 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -39,15 +39,18 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.Code
+import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Wallpaper
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -57,6 +60,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,7 +71,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -79,16 +84,213 @@ import com.xiaowei.player.data.CustomPathPrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
-import com.xiaowei.player.ui.theme.DEFAULT_THEME_COLOR_INDEX
-import com.xiaowei.player.ui.theme.MineCardDark
-import com.xiaowei.player.ui.theme.MineCardLight
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 
+private enum class SettingIconTone {
+    PRIMARY, SECONDARY, TERTIARY, ERROR, NEUTRAL
+}
+
 @Composable
-private fun settingsCardColor(): Color {
-    val isLight = MaterialTheme.colorScheme.surface.luminance() >= 0.5f
-    return if (isLight) MaterialTheme.colorScheme.surfaceVariant
-    else MaterialTheme.colorScheme.surfaceContainerHigh
+private fun SettingIconTone.toneContainerColor(): Color = when (this) {
+    SettingIconTone.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
+    SettingIconTone.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
+    SettingIconTone.TERTIARY -> MaterialTheme.colorScheme.tertiaryContainer
+    SettingIconTone.ERROR -> MaterialTheme.colorScheme.errorContainer
+    SettingIconTone.NEUTRAL -> MaterialTheme.colorScheme.surfaceContainerHighest
+}
+
+@Composable
+private fun SettingIconTone.toneContentColor(): Color = when (this) {
+    SettingIconTone.PRIMARY -> MaterialTheme.colorScheme.onPrimaryContainer
+    SettingIconTone.SECONDARY -> MaterialTheme.colorScheme.onSecondaryContainer
+    SettingIconTone.TERTIARY -> MaterialTheme.colorScheme.onTertiaryContainer
+    SettingIconTone.ERROR -> MaterialTheme.colorScheme.onErrorContainer
+    SettingIconTone.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+@Composable
+private fun SettingIconBadge(
+    icon: ImageVector,
+    tone: SettingIconTone
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .clip(CircleShape)
+            .background(tone.toneContainerColor()),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tone.toneContentColor(),
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
+private fun SettingsCategoryHeader(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.SemiBold,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 6.dp)
+    )
+}
+
+@Composable
+private fun ExpressiveSettingItem(
+    icon: ImageVector,
+    tone: SettingIconTone,
+    title: String,
+    modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    valueText: String? = null,
+    checked: Boolean? = null,
+    switchEnabled: Boolean = true,
+    itemEnabled: Boolean = true,
+    showDivider: Boolean = true,
+    onClick: (() -> Unit)? = null,
+    onCheckedChange: ((Boolean) -> Unit)? = null
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "settingItemScale"
+    )
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .alpha(if (itemEnabled) 1f else 0.4f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .then(
+                if (onClick != null && itemEnabled) {
+                    Modifier.clickable(
+                        interactionSource = interactionSource,
+                        indication = ripple(),
+                        onClick = onClick
+                    )
+                } else {
+                    Modifier
+                }
+            )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SettingIconBadge(icon = icon, tone = tone)
+            Spacer(Modifier.width(12.dp))
+            Column(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = Alignment.Start
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+                if (subtitle != null) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            if (checked != null) {
+                Switch(
+                    checked = checked,
+                    enabled = switchEnabled,
+                    onCheckedChange = onCheckedChange
+                )
+            } else if (valueText != null) {
+                Text(
+                    text = valueText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (showDivider) {
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThemeColorPickerItem(
+    enabled: Boolean,
+    selectedIndex: Int,
+    showDivider: Boolean = true,
+    onSelect: (Int) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.4f)
+            .padding(vertical = 14.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            SettingIconBadge(icon = Icons.Outlined.Palette, tone = SettingIconTone.PRIMARY)
+            Spacer(Modifier.width(12.dp))
+            Text(
+                text = Strings.get("settings_theme_color"),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+        }
+        Spacer(Modifier.height(16.dp))
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            items(PRESET_THEME_COLORS.size) { index ->
+                val preset = PRESET_THEME_COLORS[index]
+                ColorBall(
+                    color = preset.swatch,
+                    isSelected = index == selectedIndex,
+                    enabled = enabled,
+                    onClick = { onSelect(index) }
+                )
+            }
+        }
+        if (showDivider) {
+            HorizontalDivider(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+            )
+        }
+    }
 }
 
 @Composable
@@ -202,7 +404,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .statusBarsPadding()
     ) {
 
@@ -216,13 +418,13 @@ fun SettingsScreen(
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = Strings.get("back"),
-                    tint = MaterialTheme.colorScheme.onBackground
+                    tint = MaterialTheme.colorScheme.onSurface
                 )
             }
             Text(
                 text = Strings.get("settings_title"),
                 style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -231,312 +433,109 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
-                .padding(bottom = 96.dp)
+                .padding(top = 4.dp, bottom = 96.dp)
         ) {
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable { showLanguagePicker = true },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Language,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("settings_language"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
+            SettingsCategoryHeader(
+                text = Strings.get("settings_category_theme"),
+                modifier = Modifier.padding(top = 8.dp)
+            )
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable { onCustomPathClick() },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Folder,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("settings_custom_path"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .clickable { onOpenMaterialSettings() },
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = settingsCardColor()
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Palette,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.size(12.dp))
-                    Text(
-                        text = Strings.get("settings_material_settings"),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = Strings.get("settings_mix_with_others"),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(Modifier.size(4.dp))
-                    Text(
-                        text = Strings.get("settings_mix_with_others_desc"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Switch(
-                    checked = audioMixPrefs.mixWithOthersState.value,
-                    onCheckedChange = { newValue ->
-                        audioMixPrefs.mixWithOthers = newValue
-                        onToggleMixWithOthers(newValue)
+            ThemeColorPickerItem(
+                enabled = !dynamicColorEnabled && !coverColorEnabled,
+                selectedIndex = themeColorIndex,
+                onSelect = { index ->
+                    if (!dynamicColorEnabled && !coverColorEnabled) {
+                        themePrefs.themeColorIndex = index
                     }
-                )
-            }
-        }
-
-        val coverCardAlpha = if (dynamicColorEnabled) 0.4f else 1f
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .alpha(coverCardAlpha),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = Strings.get("settings_cover_color"),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(Modifier.size(4.dp))
-                    Text(
-                        text = Strings.get("settings_cover_color_desc"),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
-                Switch(
-                    checked = coverColorEnabled,
-                    enabled = !dynamicColorEnabled,
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Album,
+                tone = SettingIconTone.TERTIARY,
+                title = Strings.get("settings_cover_color"),
+                subtitle = Strings.get("settings_cover_color_desc"),
+                checked = coverColorEnabled,
+                switchEnabled = !dynamicColorEnabled,
+                itemEnabled = !dynamicColorEnabled,
+                showDivider = dynamicColorSupported,
+                onCheckedChange = { newValue ->
+                    if (!dynamicColorEnabled) {
+                        themePrefs.coverColorEnabled = newValue
+                    }
+                }
+            )
+
+            if (dynamicColorSupported) {
+                ExpressiveSettingItem(
+                    icon = Icons.Outlined.ColorLens,
+                    tone = SettingIconTone.PRIMARY,
+                    title = Strings.get("settings_dynamic_color"),
+                    subtitle = Strings.get("settings_dynamic_color_desc"),
+                    checked = dynamicColorEnabled,
+                    switchEnabled = !coverColorEnabled,
+                    itemEnabled = !coverColorEnabled,
+                    showDivider = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU,
                     onCheckedChange = { newValue ->
-                        if (!dynamicColorEnabled) {
-                            themePrefs.coverColorEnabled = newValue
+                        if (!coverColorEnabled) {
+                            themePrefs.dynamicColorEnabled = newValue
                         }
                     }
                 )
             }
-        }
 
-        if (dynamicColorSupported) {
-            val dynamicCardAlpha = if (coverColorEnabled) 0.4f else 1f
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
-                    .alpha(dynamicCardAlpha),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = settingsCardColor()
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = Strings.get("settings_dynamic_color"),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(Modifier.size(4.dp))
-                        Text(
-                            text = Strings.get("settings_dynamic_color_desc"),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    Switch(
-                        checked = dynamicColorEnabled,
-                        enabled = !coverColorEnabled,
-                        onCheckedChange = { newValue ->
-                            if (!coverColorEnabled) {
-                                themePrefs.dynamicColorEnabled = newValue
-                            }
-                        }
-                    )
-                }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ExpressiveSettingItem(
+                    icon = Icons.Outlined.Wallpaper,
+                    tone = SettingIconTone.TERTIARY,
+                    title = Strings.get("settings_material_settings"),
+                    showDivider = false,
+                    onClick = { onOpenMaterialSettings() }
+                )
             }
-        }
 
-        val themeColorCardAlpha = if (dynamicColorEnabled || coverColorEnabled) 0.4f else 1f
+            SettingsCategoryHeader(
+                text = Strings.get("settings_category_general")
+            )
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .alpha(themeColorCardAlpha),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 16.dp)
-            ) {
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Language,
+                tone = SettingIconTone.SECONDARY,
+                title = Strings.get("settings_language"),
+                onClick = { showLanguagePicker = true }
+            )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.Palette,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = Strings.get("settings_theme_color"),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Medium
-                    )
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Folder,
+                tone = SettingIconTone.TERTIARY,
+                title = Strings.get("settings_custom_path"),
+                onClick = { onCustomPathClick() }
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.VolumeUp,
+                tone = SettingIconTone.SECONDARY,
+                title = Strings.get("settings_mix_with_others"),
+                subtitle = Strings.get("settings_mix_with_others_desc"),
+                checked = audioMixPrefs.mixWithOthersState.value,
+                showDivider = false,
+                onCheckedChange = { newValue ->
+                    audioMixPrefs.mixWithOthers = newValue
+                    onToggleMixWithOthers(newValue)
                 }
+            )
 
-                Spacer(Modifier.size(16.dp))
+            SettingsCategoryHeader(
+                text = Strings.get("settings_category_about")
+            )
 
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    items(PRESET_THEME_COLORS.size) { index ->
-                        val preset = PRESET_THEME_COLORS[index]
-                        val isSelected = index == themeColorIndex
-                        ColorBall(
-                            color = preset.swatch,
-                            isSelected = isSelected,
-                            enabled = !dynamicColorEnabled && !coverColorEnabled,
-                            onClick = {
-                                if (!dynamicColorEnabled && !coverColorEnabled) {
-                                    themePrefs.themeColorIndex = index
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable {
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Code,
+                tone = SettingIconTone.PRIMARY,
+                title = Strings.get("mine_developer"),
+                valueText = Strings.get("mine_developer_name"),
+                onClick = {
                     val devUrl = "https://github.com/power690"
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(devUrl)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -548,93 +547,29 @@ fun SettingsScreen(
                         clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_developer"), devUrl))
                         Toast.makeText(context, devUrl, Toast.LENGTH_LONG).show()
                     }
-                },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Code,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("mine_developer"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = Strings.get("mine_developer_name"),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+                }
+            )
 
-        val qqGroupNumber = "767301251"
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable {
+            val qqGroupNumber = "767301251"
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Feedback,
+                tone = SettingIconTone.ERROR,
+                title = Strings.get("mine_help_feedback"),
+                valueText = qqGroupNumber,
+                onClick = {
                     val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_qq_group"), qqGroupNumber))
                     Toast.makeText(context, Strings.get("mine_qq_copied", qqGroupNumber), Toast.LENGTH_SHORT).show()
-                },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Feedback,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("mine_help_feedback"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = qqGroupNumber,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+                }
+            )
 
-        val projectUrl = "https://github.com/power690/ShuYin"
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable {
+            val projectUrl = "https://github.com/power690/ShuYin"
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.OpenInNew,
+                tone = SettingIconTone.TERTIARY,
+                title = Strings.get("mine_project_url"),
+                valueText = "GitHub",
+                onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(projectUrl)).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
@@ -645,82 +580,19 @@ fun SettingsScreen(
                         clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_project_url"), projectUrl))
                         Toast.makeText(context, Strings.get("mine_project_url") + ": " + projectUrl, Toast.LENGTH_LONG).show()
                     }
-                },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.OpenInNew,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("mine_project_url"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = "GitHub",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+                }
+            )
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp)
-                .clickable {
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Info,
+                tone = SettingIconTone.SECONDARY,
+                title = Strings.get("mine_version"),
+                valueText = BuildConfig.VERSION_NAME,
+                showDivider = false,
+                onClick = {
                     com.xiaowei.player.ui.screens.UpdateCheckerState.requestManualCheck()
-                },
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = settingsCardColor()
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = androidx.compose.foundation.BorderStroke(0.5.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(Modifier.size(12.dp))
-                Text(
-                    text = Strings.get("mine_version"),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    text = BuildConfig.VERSION_NAME,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+                }
+            )
         }
     }
 
@@ -752,8 +624,8 @@ fun SettingsScreen(
                     .padding(horizontal = 36.dp)
                     .widthIn(max = 420.dp)
                     .fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(28.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
                 shadowElevation = 8.dp
             ) {
                 Column(
@@ -883,7 +755,6 @@ fun SettingsScreen(
                 }
             }
         }
-        }
     }
 }
 
@@ -896,7 +767,7 @@ private fun ColorBall(
 ) {
     Box(
         modifier = Modifier
-            .size(44.dp)
+            .size(40.dp)
             .clip(CircleShape)
             .background(color)
             .then(
@@ -913,15 +784,10 @@ private fun ColorBall(
                 imageVector = Icons.Filled.Check,
                 contentDescription = null,
                 tint = Color.White,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
     }
-}
-
-@Composable
-private fun mineCardColor(): Color {
-    return MaterialTheme.colorScheme.surfaceContainer
 }
 
 private fun uriToFilePath(uri: Uri, context: android.content.Context): String? {
