@@ -143,7 +143,7 @@ def insert_key_into_content(content, key, lang_map):
     if key_count >= MAX_KEYS_PER_PART:
         part_numbers = [int(m.group(1)) for m in re.finditer(r'buildStringsPart(\d+)', content)]
         next_num = max(part_numbers) + 1 if part_numbers else 1
-        new_part = '\n\n    private fun buildStringsPart%d(): Map<String, Map<String, String>> = mapOf(%s\n    )' % (next_num, build_key_block(key, lang_map))
+        new_part = '\n\n    private fun buildStringsPart%d(): Map<String, Map<String, String>> = mapOf(\n%s\n    )' % (next_num, build_key_block(key, lang_map))
         insert_pos = last_end
         new_content = content[:insert_pos] + new_part + content[insert_pos:]
         sum_pattern = re.compile(r'private val ALL_STRINGS: Map<String, Map<String, String>> = [^\n]*')
@@ -161,12 +161,41 @@ def insert_key_into_content(content, key, lang_map):
 
 
 def remove_key_from_content(content, key):
-    """从 ALL_STRINGS 字典中删除指定 key"""
+    """从 STRINGS_PART 字典中删除指定 key"""
     pattern = re.compile(
         r'\n        "' + re.escape(key) + r'" to mapOf\(\n.*?\n        \),',
         re.DOTALL
     )
     return pattern.sub('', content, count=1)
+
+
+def cleanup_empty_parts(content):
+    """
+    删除空分段函数（buildStringsPartN 内已无 key），
+    并同步从 ALL_STRINGS 汇总行移除对应引用。
+    返回 (content, 清理的分段数)。
+    """
+    empty_pattern = re.compile(
+        r'\n\n    private fun buildStringsPart(\d+)\(\): Map<String, Map<String, String>> = mapOf\(\n    \)'
+    )
+    removed_nums = []
+
+    def _collect(m):
+        removed_nums.append(m.group(1))
+        return ''
+
+    content = empty_pattern.sub(_collect, content)
+    for num in removed_nums:
+        content = content.replace(' + buildStringsPart%s()' % num, '')
+
+    # 防御：若所有分段都被删空，汇总行指向空 mapOf() 保证 Kotlin 仍可编译
+    if removed_nums and not re.search(r'private fun buildStringsPart\d+\(\)', content):
+        content = re.sub(
+            r'private val ALL_STRINGS: Map<String, Map<String, String>> = [^\n]*',
+            'private val ALL_STRINGS: Map<String, Map<String, String>> = mapOf()',
+            content
+        )
+    return content, len(removed_nums)
 
 
 def read_strings_kt():
@@ -368,6 +397,7 @@ def cmd_remove(key):
         return 1
 
     new_content = remove_key_from_content(content, key)
+    new_content, _ = cleanup_empty_parts(new_content)
     write_strings_kt(new_content)
     print(f'OK 已删除 key "{key}"')
     return 0
@@ -440,6 +470,7 @@ def cmd_remove_batch(json_path=None, keys=None, dry_run=False):
         return 0
 
     if removed > 0:
+        content, cleaned_parts = cleanup_empty_parts(content)
         # 验证语法
         errors = validate_kotlin_syntax(content)
         if errors:
@@ -451,6 +482,8 @@ def cmd_remove_batch(json_path=None, keys=None, dry_run=False):
         print(f'\nOK 已写入 {STRINGS_KT_PATH}')
         print(f'  删除: {removed}')
         print(f'  未找到: {not_found}')
+        if cleaned_parts > 0:
+            print(f'  清理空分段: {cleaned_parts} 个')
     else:
         print(f'\n没有需要删除的 key（未找到 {not_found} 个）')
 
