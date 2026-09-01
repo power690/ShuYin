@@ -64,9 +64,11 @@ import com.xiaowei.player.ui.screens.FavoriteScreen
 import com.xiaowei.player.ui.screens.LibraryScreen
 import com.xiaowei.player.ui.screens.LoadingScreen
 import com.xiaowei.player.ui.screens.LyricSynthScreen
+import com.xiaowei.player.ui.screens.PlayerStyleScreen
 import com.xiaowei.player.ui.screens.MineScreen
 import com.xiaowei.player.ui.screens.NoPermissionScreen
 import com.xiaowei.player.ui.screens.PlayerScreen
+import com.xiaowei.player.ui.screens.ClassicPlayerScreen
 import com.xiaowei.player.ui.screens.RecommendDetailScreen
 import com.xiaowei.player.ui.screens.RecommendScreen
 import com.xiaowei.player.ui.screens.SearchScreen
@@ -92,6 +94,7 @@ sealed class Detail {
     object Settings : Detail()
     object MaterialSettings : Detail()
     object LyricSynth : Detail()
+    object PlayerStyle : Detail()
     object None : Detail()
 }
 
@@ -181,6 +184,23 @@ fun ShuYinApp(
     }
 
     val currentView = androidx.compose.ui.platform.LocalView.current
+
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
+    val userMaterialStyle by themePrefs.materialStyleState
+    val materialFrosted = userMaterialStyle == com.xiaowei.player.data.ThemePrefs.MATERIAL_STYLE_FROSTED
+    val playerStyle by themePrefs.playerStyleState
+    val useClassicPlayer = playerStyle == com.xiaowei.player.data.ThemePrefs.PLAYER_STYLE_CLASSIC
+
+    // 系统深浅色（与 ZMusicTheme 的 darkTheme 同源），供系统栏图标写入用
+    val systemDarkForBars = androidx.compose.foundation.isSystemInDarkTheme()
+
+    // 状态栏图标唯一权威写入点（参考项目 power690/MusicPlayer 同款时序）：
+    // animateTo 挂起返回 = 进入/退出压缩动画彻底结束的精确时刻，此刻才写图标明暗。
+    // 动画进行期间的写入会被 Android 16 系统按内容重新取色吃掉（"发了也白发"），
+    // 且提前写白会在动画期间与主屏背景形成错误对比。
+    // 冷启动首次组合：animateTo(0f) 在初值 0 处立即返回 → 立即写入正确的初始图标色。
     LaunchedEffect(playerExpanded) {
         currentView.keepScreenOn = playerExpanded
         if (playerExpanded) {
@@ -188,13 +208,23 @@ fun ShuYinApp(
         } else {
             playerEnterProgress.animateTo(0f, stackSceneSpringSpec())
         }
+        // ---- 动画彻底结束，此刻写入（不使用任何魔法数字延时） ----
+        try {
+            val window = (currentView.context as? android.app.Activity)?.window
+                ?: return@LaunchedEffect
+            val controller = androidx.core.view.WindowCompat.getInsetsController(window, currentView)
+            // 经典播放页常驻白图标；其余页面跟随系统深浅色
+            val classicOpen = playerExpanded && useClassicPlayer
+            controller.isAppearanceLightStatusBars = !classicOpen && !systemDarkForBars
+            controller.isAppearanceLightNavigationBars = !classicOpen && !systemDarkForBars
+            // 顺带关闭对比度强制（参考项目同款，防止 ROM 加遮挡）
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced = false
+                window.isNavigationBarContrastEnforced = false
+            }
+        } catch (_: Exception) {
+        }
     }
-
-    val context = androidx.compose.ui.platform.LocalContext.current
-
-    val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
-    val userMaterialStyle by themePrefs.materialStyleState
-    val materialFrosted = userMaterialStyle == com.xiaowei.player.data.ThemePrefs.MATERIAL_STYLE_FROSTED
 
     val customPathPrefs = remember { com.xiaowei.player.data.CustomPathPrefs.get(context) }
     val hasCustomPath = customPathPrefs.pathState.value.trim().isNotEmpty()
@@ -549,12 +579,16 @@ fun ShuYinApp(
                                         } catch (_: Exception) {
                                         }
                                     },
-                                    onOpenMaterialSettings = { requestDetail(Detail.MaterialSettings) }
+                                    onOpenMaterialSettings = { requestDetail(Detail.MaterialSettings) },
+                                    onOpenPlayerStyle = { requestDetail(Detail.PlayerStyle) }
                                 )
                                 Detail.MaterialSettings -> MaterialSettingsScreen(
                                     onBack = { popDetail() }
                                 )
                                 Detail.LyricSynth -> LyricSynthScreen(
+                                    onBack = { popDetail() }
+                                )
+                                Detail.PlayerStyle -> PlayerStyleScreen(
                                     onBack = { popDetail() }
                                 )
                                 Detail.None -> {  }
@@ -583,43 +617,85 @@ fun ShuYinApp(
                 }
         ) {
             currentSong?.let { song ->
-                PlayerScreen(
-                    song = song,
-                    playerState = playerState,
-                    playlist = playerPlaylist,
-                    isFavorite = library.favoriteIds.contains(song.id),
-                    onToggleFavorite = { onToggleFavorite(song.id) },
-                    onTogglePlayPause = onTogglePlayPause,
-                    onNext = onSkipNext,
-                    onPrev = onSkipPrev,
-                    onSeek = onSeek,
-                    onCyclePlayMode = onCyclePlayMode,
-                    onPlayAtIndex = onPlayAtIndex,
-                    onRemoveFromQueue = onRemoveFromQueue,
-                    onClearQueue = onClearQueue,
-                    onMinimize = { playerExpanded = false },
-                    floatingLyricEnabled = floatingLyricEnabled,
-                    onToggleFloatingLyric = onToggleFloatingLyric
-                )
+                if (useClassicPlayer) {
+                    ClassicPlayerScreen(
+                        song = song,
+                        playerState = playerState,
+                        playlist = playerPlaylist,
+                        isFavorite = library.favoriteIds.contains(song.id),
+                        onToggleFavorite = { onToggleFavorite(song.id) },
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onSkipNext,
+                        onPrev = onSkipPrev,
+                        onSeek = onSeek,
+                        onCyclePlayMode = onCyclePlayMode,
+                        onPlayAtIndex = onPlayAtIndex,
+                        onRemoveFromQueue = onRemoveFromQueue,
+                        onClearQueue = onClearQueue,
+                        onMinimize = { playerExpanded = false },
+                        floatingLyricEnabled = floatingLyricEnabled,
+                        onToggleFloatingLyric = onToggleFloatingLyric
+                    )
+                } else {
+                    PlayerScreen(
+                        song = song,
+                        playerState = playerState,
+                        playlist = playerPlaylist,
+                        isFavorite = library.favoriteIds.contains(song.id),
+                        onToggleFavorite = { onToggleFavorite(song.id) },
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onSkipNext,
+                        onPrev = onSkipPrev,
+                        onSeek = onSeek,
+                        onCyclePlayMode = onCyclePlayMode,
+                        onPlayAtIndex = onPlayAtIndex,
+                        onRemoveFromQueue = onRemoveFromQueue,
+                        onClearQueue = onClearQueue,
+                        onMinimize = { playerExpanded = false },
+                        floatingLyricEnabled = floatingLyricEnabled,
+                        onToggleFloatingLyric = onToggleFloatingLyric
+                    )
+                }
             } ?: lastSong?.let { song ->
-                PlayerScreen(
-                    song = song,
-                    playerState = playerState,
-                    playlist = playerPlaylist,
-                    isFavorite = library.favoriteIds.contains(song.id),
-                    onToggleFavorite = { onToggleFavorite(song.id) },
-                    onTogglePlayPause = onTogglePlayPause,
-                    onNext = onSkipNext,
-                    onPrev = onSkipPrev,
-                    onSeek = onSeek,
-                    onCyclePlayMode = onCyclePlayMode,
-                    onPlayAtIndex = onPlayAtIndex,
-                    onRemoveFromQueue = onRemoveFromQueue,
-                    onClearQueue = onClearQueue,
-                    onMinimize = { playerExpanded = false },
-                    floatingLyricEnabled = floatingLyricEnabled,
-                    onToggleFloatingLyric = onToggleFloatingLyric
-                )
+                if (useClassicPlayer) {
+                    ClassicPlayerScreen(
+                        song = song,
+                        playerState = playerState,
+                        playlist = playerPlaylist,
+                        isFavorite = library.favoriteIds.contains(song.id),
+                        onToggleFavorite = { onToggleFavorite(song.id) },
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onSkipNext,
+                        onPrev = onSkipPrev,
+                        onSeek = onSeek,
+                        onCyclePlayMode = onCyclePlayMode,
+                        onPlayAtIndex = onPlayAtIndex,
+                        onRemoveFromQueue = onRemoveFromQueue,
+                        onClearQueue = onClearQueue,
+                        onMinimize = { playerExpanded = false },
+                        floatingLyricEnabled = floatingLyricEnabled,
+                        onToggleFloatingLyric = onToggleFloatingLyric
+                    )
+                } else {
+                    PlayerScreen(
+                        song = song,
+                        playerState = playerState,
+                        playlist = playerPlaylist,
+                        isFavorite = library.favoriteIds.contains(song.id),
+                        onToggleFavorite = { onToggleFavorite(song.id) },
+                        onTogglePlayPause = onTogglePlayPause,
+                        onNext = onSkipNext,
+                        onPrev = onSkipPrev,
+                        onSeek = onSeek,
+                        onCyclePlayMode = onCyclePlayMode,
+                        onPlayAtIndex = onPlayAtIndex,
+                        onRemoveFromQueue = onRemoveFromQueue,
+                        onClearQueue = onClearQueue,
+                        onMinimize = { playerExpanded = false },
+                        floatingLyricEnabled = floatingLyricEnabled,
+                        onToggleFloatingLyric = onToggleFloatingLyric
+                    )
+                }
             }
         }
     }

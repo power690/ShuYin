@@ -15,6 +15,7 @@ class ThemePrefs private constructor(context: Context) {
     val coverColorEnabledState = mutableStateOf(prefs.getBoolean(KEY_COVER_COLOR, false))
     val coverColorState = mutableStateOf<Int?>(null)
     val materialStyleState = mutableStateOf(prefs.getString(KEY_MATERIAL_STYLE, DEFAULT_MATERIAL_STYLE) ?: DEFAULT_MATERIAL_STYLE)
+    val playerStyleState = mutableStateOf(prefs.getString(KEY_PLAYER_STYLE, DEFAULT_PLAYER_STYLE) ?: DEFAULT_PLAYER_STYLE)
     val lastPrimaryColorState = mutableStateOf(prefs.getInt(KEY_LAST_PRIMARY_COLOR, DEFAULT_PRIMARY_COLOR))
 
     private val colorChangedListeners = CopyOnWriteArrayList<() -> Unit>()
@@ -72,6 +73,13 @@ class ThemePrefs private constructor(context: Context) {
             notifyColorChanged()
         }
 
+    var playerStyle: String
+        get() = playerStyleState.value
+        set(value) {
+            playerStyleState.value = value
+            prefs.edit().putString(KEY_PLAYER_STYLE, value).apply()
+        }
+
     var lastPrimaryColor: Int
         get() = lastPrimaryColorState.value
         set(value) {
@@ -87,10 +95,14 @@ class ThemePrefs private constructor(context: Context) {
         private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
         private const val KEY_COVER_COLOR = "cover_color_enabled"
         private const val KEY_MATERIAL_STYLE = "material_style"
+        private const val KEY_PLAYER_STYLE = "player_style"
         private const val KEY_LAST_PRIMARY_COLOR = "last_primary_color"
         const val MATERIAL_STYLE_LIQUID = "liquid"
         const val MATERIAL_STYLE_FROSTED = "frosted"
         const val DEFAULT_MATERIAL_STYLE = MATERIAL_STYLE_LIQUID
+        const val PLAYER_STYLE_MD3 = "md3"
+        const val PLAYER_STYLE_CLASSIC = "classic"
+        const val DEFAULT_PLAYER_STYLE = PLAYER_STYLE_MD3
         const val DEFAULT_THEME_COLOR_INDEX = 1
         const val DEFAULT_PRIMARY_COLOR: Int = 0xFF005AC8.toInt()
 

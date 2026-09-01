@@ -48,6 +48,8 @@ STRINGS_KT_PATH = os.path.join(
 )
 RES_DIR = os.path.join(PROJECT_ROOT, 'app', 'src', 'main', 'res')
 
+MAX_KEYS_PER_PART = 29
+
 # 所有支持的语言代码（与 Strings.kt 中 SUPPORTED_LANGS 保持一致）
 ALL_LANGS = [
     'zh', 'zh-TW', 'zh-HK', 'zh-MO',
@@ -79,37 +81,34 @@ def escape_kotlin_string(text):
 
 def parse_strings_kt(content):
     """
-    解析 Strings.kt 中的 ALL_STRINGS 字典。
+    解析 Strings.kt 中的所有 STRINGS_PART 字典。
     返回 dict: { key: { lang: text } }
     """
     result = {}
-    # 找 ALL_STRINGS: Map<...> = mapOf( ... )
-    m = re.search(r'private val ALL_STRINGS[^=]*=\s*mapOf\((.*?)\n    \)\n\}', content, re.DOTALL)
-    if not m:
-        raise RuntimeError('找不到 ALL_STRINGS 字典')
-    body = m.group(1)
-
-    # 找每个 "key" to mapOf( ... ),
-    key_pattern = re.compile(
-        r'"([a-z_][a-z0-9_]*)" to mapOf\(\n(.*?)\n        \),',
+    part_pattern = re.compile(
+        r'private fun buildStringsPart\d+\(\)[^=]*=\s*mapOf\((.*?)\n    \)',
         re.DOTALL
     )
-    for km in key_pattern.finditer(body):
-        key = km.group(1)
-        block = km.group(2)
-        lang_map = {}
-        # 找每个 "lang" to "text",
-        lang_pattern = re.compile(r'"([a-z]{2}(?:-[A-Z]{2})?)" to "((?:[^"\\]|\\.)*)"')
-        for lm in lang_pattern.finditer(block):
-            lang = lm.group(1)
-            text = lm.group(2)
-            # 反转义 Kotlin 字符串
-            text = text.replace('\\n', '\n')
-            text = text.replace('\\"', '"')
-            text = text.replace('\\$', '$')
-            text = text.replace('\\\\', '\\')
-            lang_map[lang] = text
-        result[key] = lang_map
+    for pm in part_pattern.finditer(content):
+        body = pm.group(1)
+        key_pattern = re.compile(
+            r'"([a-z_][a-z0-9_]*)" to mapOf\(\n(.*?)\n        \),',
+            re.DOTALL
+        )
+        for km in key_pattern.finditer(body):
+            key = km.group(1)
+            block = km.group(2)
+            lang_map = {}
+            lang_pattern = re.compile(r'"([a-z]{2}(?:-[A-Z]{2})?)" to "((?:[^"\\]|\\.)*)"')
+            for lm in lang_pattern.finditer(block):
+                lang = lm.group(1)
+                text = lm.group(2)
+                text = text.replace('\\n', '\n')
+                text = text.replace('\\"', '"')
+                text = text.replace('\\$', '$')
+                text = text.replace('\\\\', '\\')
+                lang_map[lang] = text
+            result[key] = lang_map
     return result
 
 
@@ -126,22 +125,39 @@ def build_key_block(key, lang_map):
 
 def insert_key_into_content(content, key, lang_map):
     """
-    在 ALL_STRINGS 字典的最后一个 key 后面插入新 key。
+    在最后一个 STRINGS_PART 字典的末尾插入新 key。
     如果 key 已存在，先删除旧的。
+    如果最后一个 PART 已满，新建一个 PART 并更新 ALL_STRINGS 汇总。
     """
-    # 如果 key 已存在，先删除
     content = remove_key_from_content(content, key)
 
-    # 找 ALL_STRINGS 字典的结束 `    )\n}`
-    end_pattern = re.compile(r'\n    \)\n\}\s*$')
-    m = end_pattern.search(content)
-    if not m:
-        raise RuntimeError('找不到 ALL_STRINGS 字典结束位置')
+    part_positions = [(m.start(), m.end()) for m in re.finditer(
+        r'private fun buildStringsPart\d+\(\)[^=]*=\s*mapOf\(.*?\n    \)', content, re.DOTALL)]
+    if not part_positions:
+        raise RuntimeError('找不到 STRINGS_PART 字典')
 
+    last_start, last_end = part_positions[-1]
+    last_part = content[last_start:last_end]
+    key_count = len(re.findall(r'"[a-z_][a-z0-9_]*" to mapOf\(', last_part))
+
+    if key_count >= MAX_KEYS_PER_PART:
+        part_numbers = [int(m.group(1)) for m in re.finditer(r'buildStringsPart(\d+)', content)]
+        next_num = max(part_numbers) + 1 if part_numbers else 1
+        new_part = '\n\n    private fun buildStringsPart%d(): Map<String, Map<String, String>> = mapOf(%s\n    )' % (next_num, build_key_block(key, lang_map))
+        insert_pos = last_end
+        new_content = content[:insert_pos] + new_part + content[insert_pos:]
+        sum_pattern = re.compile(r'private val ALL_STRINGS: Map<String, Map<String, String>> = [^\n]*')
+        sum_match = sum_pattern.search(new_content)
+        if sum_match:
+            new_content = new_content[:sum_match.end()] + ' + buildStringsPart%d()' % next_num + new_content[sum_match.end():]
+        return new_content
+
+    close_matches = list(re.finditer(r'\n    \)', content[last_start:last_end]))
+    if not close_matches:
+        raise RuntimeError('找不到最后一个 STRINGS_PART 的结束位置')
+    insert_pos = last_start + close_matches[-1].start()
     new_block = '\n' + build_key_block(key, lang_map)
-    insert_pos = m.start()
-    new_content = content[:insert_pos] + new_block + content[insert_pos:]
-    return new_content
+    return content[:insert_pos] + new_block + content[insert_pos:]
 
 
 def remove_key_from_content(content, key):

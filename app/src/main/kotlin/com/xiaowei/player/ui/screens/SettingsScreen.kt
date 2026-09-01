@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -298,7 +299,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onCustomPathConfirm: (String) -> Unit = {},
     onToggleMixWithOthers: (Boolean) -> Unit = {},
-    onOpenMaterialSettings: () -> Unit = {}
+    onOpenMaterialSettings: () -> Unit = {},
+    onOpenPlayerStyle: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
@@ -504,6 +506,13 @@ fun SettingsScreen(
                 tone = SettingIconTone.SECONDARY,
                 title = Strings.get("settings_language"),
                 onClick = { showLanguagePicker = true }
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.MusicNote,
+                tone = SettingIconTone.PRIMARY,
+                title = Strings.get("settings_player_style"),
+                onClick = onOpenPlayerStyle
             )
 
             ExpressiveSettingItem(
