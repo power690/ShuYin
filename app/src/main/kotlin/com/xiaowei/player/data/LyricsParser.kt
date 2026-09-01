@@ -6,6 +6,16 @@ object LyricsParser {
     private val metaTagRegex = Regex("""\[(ti|ar|al|by|offset):(.*)]""", RegexOption.IGNORE_CASE)
     private val wordTagRegex = Regex("""<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>""")
 
+    // 增强型逐字 LRC：[00:00.57]成[00:01.07]长…… 文字内联在两个时间戳之间
+    private fun isInlineWordLine(matches: List<MatchResult>, line: String): Boolean {
+        if (matches.size < 2) return false
+        for (i in 0 until matches.size - 1) {
+            val between = line.substring(matches[i].range.last + 1, matches[i + 1].range.first)
+            if (between.isNotBlank()) return true
+        }
+        return false
+    }
+
     private fun parseTimestamp(min: String, sec: String, msPart: String): Long {
         val minL = min.toLong()
         val secL = sec.toLong()
@@ -46,6 +56,39 @@ object LyricsParser {
         for (line in lines) {
             val matches = timeTagRegex.findAll(line).toList()
             if (matches.isEmpty()) continue
+
+            // 新增：增强型逐字 LRC（内联时间戳），与旧格式并存
+            if (isInlineWordLine(matches, line)) {
+                val words = mutableListOf<LyricWord>()
+                val textBuilder = StringBuilder()
+                for (i in matches.indices) {
+                    val segStart = matches[i].range.last + 1
+                    val segEnd = if (i + 1 < matches.size) matches[i + 1].range.first else line.length
+                    if (segEnd <= segStart) continue
+                    val segText = line.substring(segStart, segEnd)
+                    if (segText.isEmpty()) continue
+                    val wt = parseTimestamp(
+                        matches[i].groupValues[1], matches[i].groupValues[2], matches[i].groupValues[3]
+                    ) + offset
+                    words.add(LyricWord(timeMs = wt.coerceAtLeast(0), text = segText))
+                    textBuilder.append(segText)
+                }
+                val inlineText = textBuilder.toString()
+                if (inlineText.isNotBlank() && words.isNotEmpty()) {
+                    val lineTime = parseTimestamp(
+                        matches[0].groupValues[1], matches[0].groupValues[2], matches[0].groupValues[3]
+                    ) + offset
+                    result.add(
+                        LyricLine(
+                            timeMs = lineTime.coerceAtLeast(0),
+                            text = inlineText,
+                            words = words
+                        )
+                    )
+                }
+                continue
+            }
+
             val contentStart = matches.last().range.last + 1
             val content = line.substring(contentStart)
 

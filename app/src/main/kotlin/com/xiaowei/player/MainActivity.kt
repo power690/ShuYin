@@ -11,7 +11,6 @@ import android.os.Bundle
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -116,16 +115,16 @@ class MainActivity : ComponentActivity() {
             floatingLyricEnabled = true
         }
 
-        enableEdgeToEdge(
-            statusBarStyle = androidx.activity.SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            ),
-            navigationBarStyle = androidx.activity.SystemBarStyle.auto(
-                android.graphics.Color.TRANSPARENT,
-                android.graphics.Color.TRANSPARENT
-            )
-        )
+        // 边到边手动接管（官方文档认可方案，与参考项目一致）：
+        // 不用 enableEdgeToEdge()——它内部注册 OnConfigurationChangedListener，任何配置变化
+        // （uiMode/screenLayout/screenSize/density，Manifest 均自处理不重建）都会按"系统当前
+        // 深浅色"自动重写图标：系统浅色时写黑图标，直接覆盖播放页的白色。
+        // Android 16 预测式返回动画也触发该回调（"返回再进就黑"的根源）。
+        // 手动方案：setDecorFitsSystemWindows(false) + 透明栏色 + InsetsController 完全自控，
+        // 覆盖 Android 6~17（API23-29 兼容层自动映射到旧 systemUiVisibility flag）。
+        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+        window.statusBarColor = android.graphics.Color.TRANSPARENT
+        window.navigationBarColor = android.graphics.Color.TRANSPARENT
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
@@ -390,6 +389,9 @@ class MainActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         isSystemDarkTheme = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        // 深浅色切换立即重写系统栏图标（原 Theme SideEffect 持续写入已移除，
+        // 此刻无动画进行，直接写是安全时机）
+        reassertSystemBarAppearance()
     }
 
     override fun onStop() {
@@ -417,5 +419,38 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wasManageStorageGranted = android.os.Environment.isExternalStorageManager()
         }
+
+        // 参考项目同款：回到前台时重申系统栏图标颜色
+        reassertSystemBarAppearance()
+    }
+
+    /**
+     * 窗口每次重新获得焦点就重申一次系统栏图标颜色（参考 power690/MusicPlayer 的修复）。
+     * 部分 ROM 依据状态栏底下内容亮度自动翻转图标颜色，正是发生在焦点切换瞬间——
+     * 经典播放页打开期间（forceLightIcons=true）此钩子保证立刻写回白色，不给黑图标留生存时间。
+     */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            reassertSystemBarAppearance()
+        }
+    }
+
+    private fun reassertSystemBarAppearance() {
+        try {
+            val forceLightIcons =
+                com.xiaowei.player.ui.theme.StatusBarStyle.forceLightIcons.value
+            // forceLightIcons=true（经典播放页）→ 强制白色图标；否则跟随系统深浅色
+            val lightBars = !forceLightIcons && !isSystemDarkTheme
+            val controller = androidx.core.view.WindowCompat.getInsetsController(
+                window, window.decorView
+            )
+            controller.isAppearanceLightStatusBars = lightBars
+            controller.isAppearanceLightNavigationBars = lightBars
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                window.isStatusBarContrastEnforced = false
+                window.isNavigationBarContrastEnforced = false
+            }
+        } catch (_: Exception) {}
     }
 }

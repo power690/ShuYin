@@ -10,6 +10,7 @@ import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.toArgb
@@ -65,6 +66,38 @@ private val DarkColors = darkColorScheme(
     outlineVariant = OutlineVariantDark
 )
 
+/**
+ * 全局状态栏图标风格开关（引用计数版）：
+ * 深色背景页面（如经典播放页）acquire() 强制白色图标，退出 release()。
+ * 计数设计防切歌竞态：currentSong 短暂为 null 时经典页会"卸载旧实例+挂载新实例"，
+ * 新实例先 onRemembered、旧实例后 onForgotten（Compose 保证此顺序），
+ * 若用布尔值，旧实例 onDispose 会把标志复位成 false 造成闪黑；计数则始终 >=1。
+ */
+object StatusBarStyle {
+    private var refCount = 0
+    val forceLightIcons = mutableStateOf(false)
+
+    fun acquire() {
+        refCount++
+        forceLightIcons.value = true
+    }
+
+    /** @return true = 已全部释放（最后一个实例退出，需要还原跟随系统） */
+    fun release(): Boolean {
+        refCount = (refCount - 1).coerceAtLeast(0)
+        if (refCount == 0) forceLightIcons.value = false
+        return refCount == 0
+    }
+
+    /**
+     * 兜底：若仍有页面持有引用但标志位因丢写为 false，重新点亮。
+     * 供非组合上下文（轮询循环/view.post）调用，幂等。
+     */
+    fun ensureFlag() {
+        if (refCount > 0) forceLightIcons.value = true
+    }
+}
+
 @Composable
 fun ZMusicTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -89,12 +122,8 @@ fun ZMusicTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
             WindowCompat.setDecorFitsSystemWindows(window, false)
-            val controller = WindowCompat.getInsetsController(window, view)
-            controller.isAppearanceLightStatusBars = !darkTheme
-
-            controller.isAppearanceLightNavigationBars = !darkTheme
 
             @Suppress("DEPRECATION")
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {

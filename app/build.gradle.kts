@@ -9,13 +9,32 @@ android {
     namespace = "com.xiaowei.player"
     compileSdk = 37
 
+    ndkVersion = "30.0.14904198"
+
+    val releaseBuild = gradle.startParameter.taskNames.any { it.lowercase().contains("release") }
+
     defaultConfig {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 14
-        versionName = "1.7.0"
+        versionCode = 15
+        versionName = "1.8.0"
         vectorDrawables { useSupportLibrary = true }
+
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-std=c++11"
+                arguments += "-DCMAKE_SUPPRESS_REGENERATION=TRUE"
+            }
+        }
+
+        ndk {
+            abiFilters += if (releaseBuild) {
+                listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            } else {
+                listOf("arm64-v8a")
+            }
+        }
     }
 
     lint {
@@ -74,6 +93,13 @@ android {
     sourceSets {
         getByName("main") {
             kotlin.srcDirs("src/main/kotlin")
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "4.1.2"
         }
     }
 }
