@@ -27,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -91,7 +92,7 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
             val imageWidth = imageHeight * STYLE_PREVIEW_RATIO
 
             Column(
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(BiasAlignment(horizontalBias = 0f, verticalBias = -0.3f)),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Row(
