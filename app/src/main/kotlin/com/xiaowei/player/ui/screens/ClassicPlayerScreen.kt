@@ -300,6 +300,7 @@ fun ClassicPlayerScreen(
                                             interactionSource = remember { MutableInteractionSource() }
                                         ) { showLyrics = !showLyrics },
                                     shape = RoundedCornerShape(6.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                 ) {
                                     ClassicPlayerCover(
@@ -423,6 +424,7 @@ fun ClassicPlayerScreen(
                                             interactionSource = remember { MutableInteractionSource() }
                                         ) { showLyrics = !showLyrics },
                                     shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent),
                                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                 ) {
                                     ClassicPlayerCover(
@@ -1193,8 +1195,8 @@ private fun ClassicPlayerCover(
         modifier = modifier.background(
             Brush.verticalGradient(
                 listOf(
-                    MaterialTheme.colorScheme.primaryContainer,
-                    MaterialTheme.colorScheme.tertiaryContainer
+                    Color(0xFF2E2E2E),
+                    Color(0xFF161616)
                 )
             )
         ),
@@ -1212,7 +1214,7 @@ private fun ClassicPlayerCover(
             Icon(
                 imageVector = Icons.Filled.MusicNote,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                tint = Color.White.copy(alpha = 0.4f),
                 modifier = Modifier.size(96.dp)
             )
         }
