@@ -42,11 +42,11 @@
 然后运行：
 
 ```bash
-cd MusicApp/scripts
+cd ShuYin/scripts
 python3 i18n_helper.py add new_strings.json
 ```
 
-脚本会自动把这两个 key 添加到 `Strings.kt` 末尾。
+脚本会自动把这两个 key 添加到 `Strings.kt` 末尾（`Strings.kt` 内部按分段组织，见下文规则说明）。
 
 ### 2. 试运行（推荐）
 
@@ -108,6 +108,7 @@ python3 i18n_helper.py add <json_file> [--dry-run]
 - 如果 key 已存在，会更新它的翻译（覆盖）
 - 字符串中的 `$`、`"`、`\`、换行符会自动转义，无需手动处理
 - 占位符 `%1$s`、`%1$d` 直接写，脚本会正确转义 `$`
+- `Strings.kt` 采用分段结构：内部由多个 `buildStringsPart1()`、`buildStringsPart2()`… 分段函数组成（每段最多 29 个 key，防止超过 JVM 64KB 单方法上限），并由 `ALL_STRINGS` 汇总行合并。add 会自动追加到最后一个分段末尾，分段满了自动新建分段并更新汇总行——使用者无需关心分段
 
 **示例输出：**
 ```
@@ -167,6 +168,8 @@ OK 语法检查通过
 ```bash
 python3 i18n_helper.py remove <key_name>
 ```
+
+若删除后某个分段变为空，脚本会自动清理该分段函数及汇总行引用，不留死代码。
 
 示例：
 ```bash
@@ -294,7 +297,7 @@ EOF
 ### 步骤 2：试运行
 
 ```bash
-cd MusicApp/scripts
+cd ShuYin/scripts
 python3 i18n_helper.py add /tmp/settings_strings.json --dry-run
 ```
 
@@ -315,7 +318,7 @@ python3 i18n_helper.py validate
 ### 步骤 5：编译 APK
 
 ```bash
-cd MusicApp
+cd ShuYin
 ./gradlew :app:assembleDebug
 ```
 
@@ -333,19 +336,21 @@ val title = com.xiaowei.player.i18n.Strings.get("settings_title")
 
 1. **运行前备份**：脚本会直接修改 `Strings.kt`，建议用 Git 管理或手动备份。
 
-2. **key 命名规范**：
+2. **手工编辑注意**：`Strings.kt` 的字符串存放在 `buildStringsPart1~N()` 分段函数内，`ALL_STRINGS` 那一行只是各分段的汇总引用——手工加 key 时应加到最后一个分段的 `mapOf(...)` 末尾，不要加到汇总行；拿不准就用 `add` 命令代替手工编辑。
+
+3. **key 命名规范**：
    - 用小写字母 + 下划线（snake_case）
    - 按功能分组前缀，如 `tab_`、`search_`、`playlist_`、`mine_`
    - 名称要有意义，避免 `a`、`b`、`tmp` 这种
 
-3. **占位符**：
+4. **占位符**：
    - 用 `%1$s`、`%1$d`、`%2$s` 等格式
    - `$` 字符脚本会自动转义，直接写即可
    - 调用时用 `Strings.get("key", arg1, arg2)`
 
-4. **JSON 文件编码**：必须用 UTF-8 编码（默认就是）。
+5. **JSON 文件编码**：必须用 UTF-8 编码（默认就是）。
 
-5. **添加新语言**：如果要新增一种语言（如希伯来语 `he`）：
+6. **添加新语言**：如果要新增一种语言（如希伯来语 `he`）：
    - 在 `Strings.kt` 的 `SUPPORTED_LANGS` 中加 `"he"`
    - 在 `i18n_helper.py` 的 `ALL_LANGS` 列表中加 `"he"`
    - 给每个 key 添加 `"he"` 翻译（可用脚本批量添加）
