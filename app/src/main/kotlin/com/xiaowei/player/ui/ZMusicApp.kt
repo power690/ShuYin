@@ -193,14 +193,8 @@ fun ShuYinApp(
     val playerStyle by themePrefs.playerStyleState
     val useClassicPlayer = playerStyle == com.xiaowei.player.data.ThemePrefs.PLAYER_STYLE_CLASSIC
 
-    // 系统深浅色（与 ZMusicTheme 的 darkTheme 同源），供系统栏图标写入用
     val systemDarkForBars = androidx.compose.foundation.isSystemInDarkTheme()
 
-    // 状态栏图标唯一权威写入点（参考项目 power690/MusicPlayer 同款时序）：
-    // animateTo 挂起返回 = 进入/退出压缩动画彻底结束的精确时刻，此刻才写图标明暗。
-    // 动画进行期间的写入会被 Android 16 系统按内容重新取色吃掉（"发了也白发"），
-    // 且提前写白会在动画期间与主屏背景形成错误对比。
-    // 冷启动首次组合：animateTo(0f) 在初值 0 处立即返回 → 立即写入正确的初始图标色。
     LaunchedEffect(playerExpanded) {
         currentView.keepScreenOn = playerExpanded
         if (playerExpanded) {
@@ -208,16 +202,13 @@ fun ShuYinApp(
         } else {
             playerEnterProgress.animateTo(0f, stackSceneSpringSpec())
         }
-        // ---- 动画彻底结束，此刻写入（不使用任何魔法数字延时） ----
         try {
             val window = (currentView.context as? android.app.Activity)?.window
                 ?: return@LaunchedEffect
             val controller = androidx.core.view.WindowCompat.getInsetsController(window, currentView)
-            // 经典播放页常驻白图标；其余页面跟随系统深浅色
             val classicOpen = playerExpanded && useClassicPlayer
             controller.isAppearanceLightStatusBars = !classicOpen && !systemDarkForBars
             controller.isAppearanceLightNavigationBars = !classicOpen && !systemDarkForBars
-            // 顺带关闭对比度强制（参考项目同款，防止 ROM 加遮挡）
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
                 window.isStatusBarContrastEnforced = false
                 window.isNavigationBarContrastEnforced = false
