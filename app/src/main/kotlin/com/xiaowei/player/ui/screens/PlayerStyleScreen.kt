@@ -40,7 +40,6 @@ import androidx.compose.ui.unit.sp
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
 
-// 新截图 1260x2800，比例一致 0.45，直接使用
 private val STYLE_PREVIEW_RATIO = 0.45f
 
 @Composable
@@ -54,7 +53,6 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
-        // 标题栏：返回 + 播放页风格
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -79,7 +77,6 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
             )
         }
 
-        // 中心：两张预览图并排，左=经典样式，右=MD3
         BoxWithConstraints(
             modifier = Modifier
                 .weight(1f)
@@ -87,7 +84,6 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
                 .padding(horizontal = 24.dp, vertical = 16.dp)
         ) {
             val gap = 16.dp
-            // 高度封顶：可用高度的 55%，同时宽度不超过半宽对应的等比高度，取小者
             val imageHeight = minOf(maxHeight * 0.55f, ((maxWidth - gap) / 2) / STYLE_PREVIEW_RATIO)
             val imageWidth = imageHeight * STYLE_PREVIEW_RATIO
 
@@ -141,7 +137,6 @@ private fun StylePreviewCard(
                 modifier = Modifier
                     .size(width = width, height = height)
                     .clip(RoundedCornerShape(16.dp))
-                    // 放在 clip 之后：水波纹被裁成圆角、只覆盖图片区域，不延伸到下方文字
                     .clickable(onClick = onClick)
                     .border(
                         width = if (isSelected) 2.5.dp else 1.dp,
@@ -151,7 +146,6 @@ private fun StylePreviewCard(
                     )
             )
             if (isSelected) {
-                // 右上角选中对勾
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
