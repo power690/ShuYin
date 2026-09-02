@@ -17,7 +17,6 @@ object LyricTypeDetector {
         val lineTimestampRe = Regex("\\[\\d{2}:\\d{2}[.:.]?\\d{0,3}\\]")
         if (!lineTimestampRe.containsMatchIn(lyricsText)) return LyricType.NONE
 
-        // 增强型逐字 LRC：[00:00.57]成[00:01.07]长…… 时间戳之间存在正文文字
         val inlineWordRe = Regex("\\[\\d{1,3}:\\d{1,2}[.:]?\\d{0,3}]\\S+\\[\\d{1,3}:\\d{1,2}")
         if (inlineWordRe.containsMatchIn(lyricsText)) return LyricType.ALREADY_OK
 
