@@ -78,3 +78,6 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+-dontobfuscate
+-dontshrink
+-keepattributes SourceFile,LineNumberTable

@@ -50,7 +50,7 @@ android {
         }
         release {
 
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             isShrinkResources = false
 
             proguardFiles(
