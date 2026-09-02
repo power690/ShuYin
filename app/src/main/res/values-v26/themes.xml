@@ -4,8 +4,6 @@
     <style name="Theme.ZMusic" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <!-- 窗口基础态 = 白图标（与 values/themes.xml 同步修正，参考项目同款）：
-             Android 16 系统重新取色时按此声明落白，与播放页一致 -->
         <item name="android:windowLightStatusBar">false</item>
 
         <item name="android:windowLightNavigationBar">false</item>
