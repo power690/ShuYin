@@ -13,10 +13,6 @@ media = "1.7.0"
 coil = "2.7.0"
 mp3agic = "0.9.1"
 room = "2.7.1"
-# HeHang0 预编译的 ExoPlayer FLAC 扩展（基于 media3 1.3.1 编译）
-# 用 libFLAC native 解码（FLAC 官方参考实现，lossless 音质完美）
-# Apache 2.0 协议，闭源 APP 友好
-# 注意：AAR 自带 4 个 ABI 的 libflacJNI.so，不依赖系统 codec
 hehangFlacExtension = "1.3.1"
 okhttp = "4.12.0"
 backdrop = "2.0.1"
@@ -46,10 +42,6 @@ mp3agic = { group = "com.mpatric", name = "mp3agic", version.ref = "mp3agic" }
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-# HeHang0 预编译的 ExoPlayer FLAC 扩展
-# Apache 2.0 协议，自带 4 个 ABI 的 libflacJNI.so
-# 提供 native libFLAC 解码（FLAC 官方参考实现），不依赖系统 MediaCodec
-# 魔改 ROM 也能播 FLAC，支持 Android 5.0+ (API 21+)
 hehang-flac-extension = { group = "com.github.HeHang0", name = "exoplayer-extension-flac", version.ref = "hehangFlacExtension" }
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
 backdrop = { group = "io.github.kyant0", name = "backdrop", version.ref = "backdrop" }
