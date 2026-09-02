@@ -144,21 +144,11 @@ fun ClassicPlayerScreen(
     var showPlaylist by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // 播放页永远深色背景：acquire 全局标志让主题强制白色系统栏图标（MD3 页不受影响）。
-    // 版本兼容走 WindowInsetsControllerCompat（API23-29 旧 flag / API30+ InsetsController /
-    // Android15+ edge-to-edge，同一入口覆盖 6~17）。
     val statusBarView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(Unit) {
-        // 只维护全局标志（供 MainActivity.reassert 读取），不再直接写窗口图标色：
-        // 图标色的权威写入由 ZMusicApp 的 LaunchedEffect(playerExpanded) 在
-        // 进入/退出压缩动画彻底结束后执行（参考项目同款时序）。动画期间抢写会被
-        // Android 16 系统按内容重新取色吃掉（"发了也白发"），且是历史 Bug 源头。
-        // 计数立即 +1（普通 Int 写入，任何时机都生效）；
-        // 标志位通过 view.post 在 apply 阶段之外写入，避免快照丢写。
         com.xiaowei.player.ui.theme.StatusBarStyle.acquire()
         statusBarView.post { com.xiaowei.player.ui.theme.StatusBarStyle.ensureFlag() }
         onDispose {
-            // 退出立即按当前系统深浅色还原（直接写窗口，即时生效）
             val exitWindow = (statusBarView.context as? android.app.Activity)?.window
             exitWindow?.let {
                 val systemDarkNow = (statusBarView.resources.configuration.uiMode
@@ -168,7 +158,6 @@ fun ClassicPlayerScreen(
                 exitController.isAppearanceLightStatusBars = !systemDarkNow
                 exitController.isAppearanceLightNavigationBars = !systemDarkNow
             }
-            // 计数释放也放到 apply 之外，保证标志位干净地翻回 false
             statusBarView.post {
                 if (com.xiaowei.player.ui.theme.StatusBarStyle.release()) {
                     val w = (statusBarView.context as? android.app.Activity)?.window ?: return@post
@@ -1111,7 +1100,6 @@ private fun ClassicKaraokeLineAndroidView(
 
 @Composable
 private fun ClassicBlurredBackground(filePath: String?) {
-    // 双缓冲：remember 不随 filePath 重置，切歌时旧模糊图保留在屏上，新图加载完成后交叉淡入，不闪灰底
     var shownBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var loadedFile by remember { mutableStateOf<String?>(null) }
 
