@@ -6,7 +6,6 @@ object LyricsParser {
     private val metaTagRegex = Regex("""\[(ti|ar|al|by|offset):(.*)]""", RegexOption.IGNORE_CASE)
     private val wordTagRegex = Regex("""<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>""")
 
-    // 增强型逐字 LRC：[00:00.57]成[00:01.07]长…… 文字内联在两个时间戳之间
     private fun isInlineWordLine(matches: List<MatchResult>, line: String): Boolean {
         if (matches.size < 2) return false
         for (i in 0 until matches.size - 1) {
@@ -57,7 +56,6 @@ object LyricsParser {
             val matches = timeTagRegex.findAll(line).toList()
             if (matches.isEmpty()) continue
 
-            // 新增：增强型逐字 LRC（内联时间戳），与旧格式并存
             if (isInlineWordLine(matches, line)) {
                 val words = mutableListOf<LyricWord>()
                 val textBuilder = StringBuilder()
