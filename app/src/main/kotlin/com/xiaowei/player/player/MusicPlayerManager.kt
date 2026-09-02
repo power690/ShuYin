@@ -461,7 +461,6 @@ class MusicPlayerManager(
             .setArtist(displayArtist)
             .setAlbumTitle(displayAlbum)
             .setAlbumArtist(albumArtist ?: displayArtist)
-            .setArtworkUri(albumArtUri)
             .setMediaType(MediaMetadata.MEDIA_TYPE_MUSIC)
             .build()
 

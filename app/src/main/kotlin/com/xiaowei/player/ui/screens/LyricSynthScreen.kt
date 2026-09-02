@@ -428,7 +428,6 @@ private fun SynthRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumCover(
-            coverUri = null,
             modifier = Modifier.size(48.dp),
             cornerRadius = 8,
             filePath = mf.file.absolutePath

@@ -204,8 +204,7 @@ fun ClassicPlayerScreen(
             val nextSong = playlist.getOrNull(playerState.currentIndex + 1)
             com.xiaowei.player.data.EmbeddedCoverFetcher.preloadPlayingCovers(
                 currentFilePath = song.data,
-                nextFilePath = nextSong?.data,
-                context = context
+                nextFilePath = nextSong?.data
             )
             lastPreloadedSongId = song.id
         }
@@ -304,7 +303,6 @@ fun ClassicPlayerScreen(
                                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                 ) {
                                     ClassicPlayerCover(
-                                        coverUri = song.albumArtUri,
                                         modifier = Modifier.fillMaxSize(),
                                         filePath = song.data
                                     )
@@ -428,7 +426,6 @@ fun ClassicPlayerScreen(
                                     elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                                 ) {
                                     ClassicPlayerCover(
-                                        coverUri = song.albumArtUri,
                                         modifier = Modifier.fillMaxSize(),
                                         filePath = song.data
                                     )
@@ -1172,23 +1169,32 @@ private fun ClassicBlurredBackground(filePath: String?) {
 
 @Composable
 private fun ClassicPlayerCover(
-    @Suppress("UNUSED_PARAMETER") coverUri: Uri?,
     modifier: Modifier = Modifier,
     filePath: String? = null
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var currentUri by remember(filePath) {
-        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedUriSync(filePath))
+    var coverBytes by remember(filePath) {
+        mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedBytesSync(filePath))
     }
 
-    if (currentUri == null && !filePath.isNullOrBlank()) {
+    if (coverBytes == null && !filePath.isNullOrBlank()) {
         LaunchedEffect(filePath) {
-            val uri = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverUri(filePath, context)
+            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(filePath)
             }
-            currentUri = uri
+            coverBytes = bytes
         }
+    }
+
+    val imageRequest = remember(coverBytes) {
+        if (coverBytes != null && !filePath.isNullOrBlank()) {
+            coil.request.ImageRequest.Builder(context)
+                .data(coverBytes)
+                .size(1200)
+                .memoryCacheKey("full\u0000$filePath")
+                .build()
+        } else null
     }
 
     Box(
@@ -1202,9 +1208,9 @@ private fun ClassicPlayerCover(
         ),
         contentAlignment = Alignment.Center
     ) {
-        if (currentUri != null) {
+        if (imageRequest != null) {
             AsyncImage(
-                model = currentUri,
+                model = imageRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop

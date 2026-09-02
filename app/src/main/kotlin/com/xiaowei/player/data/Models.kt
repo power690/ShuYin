@@ -1,7 +1,5 @@
 package com.xiaowei.player.data
 
-import android.net.Uri
-
 private fun isInvalidMetadata(s: String?): Boolean {
     if (s.isNullOrBlank()) return true
     val trimmed = s.trim()
@@ -31,7 +29,6 @@ data class Song(
     val track: Int = 0,
     val year: Int = 0,
     val genre: String? = null,
-    val albumArtUri: Uri? = null,
     val lyrics: String? = null,
     val mimeType: String? = null,
     val size: Long = 0,
@@ -54,7 +51,6 @@ data class Artist(
     val name: String,
     val songCount: Int,
     val albumCount: Int,
-    val albumArtUri: Uri? = null,
     val totalDuration: Long = 0,
 
     val firstSongData: String? = null
@@ -69,7 +65,6 @@ data class Album(
     val artist: String,
     val year: Int,
     val songCount: Int,
-    val albumArtUri: Uri? = null,
     val totalDuration: Long = 0,
     val firstSongData: String? = null
 ) {
@@ -98,6 +93,5 @@ data class LyricLine(
 data class RecommendCard(
     val title: String,
     val subtitle: String,
-    val coverUri: Uri?,
     val songs: List<Song>
 )

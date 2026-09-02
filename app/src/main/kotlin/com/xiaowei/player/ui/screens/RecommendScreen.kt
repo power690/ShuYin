@@ -306,9 +306,9 @@ private fun RecommendCardItem(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AlbumCover(
-                coverUri = card.coverUri,
                 modifier = Modifier.fillMaxSize(),
                 cornerRadius = 16,
+                coverSizePx = 384,
                 filePath = card.songs.firstOrNull()?.data
             )
             GradientScrim(
@@ -368,11 +368,11 @@ fun AlbumTile(album: Album, onClick: () -> Unit) {
             .padding(4.dp)
     ) {
         AlbumCover(
-            coverUri = album.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(128.dp),
             cornerRadius = 16,
+            coverSizePx = 384,
             filePath = album.firstSongData
         )
         Spacer(Modifier.height(7.dp))
@@ -418,11 +418,11 @@ fun ArtistTile(artist: Artist, onClick: () -> Unit) {
             .padding(4.dp)
     ) {
         AlbumCover(
-            coverUri = artist.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(128.dp),
             cornerRadius = 16,
+            coverSizePx = 384,
             filePath = artist.firstSongData
         )
         Spacer(Modifier.height(7.dp))

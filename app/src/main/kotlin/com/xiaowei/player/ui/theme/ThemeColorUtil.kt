@@ -1,18 +1,11 @@
 package com.xiaowei.player.ui.theme
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.drawable.BitmapDrawable
-import android.graphics.drawable.Drawable
-import android.net.Uri
+import android.graphics.BitmapFactory
 import android.util.LruCache
 import androidx.compose.ui.graphics.Color
 import androidx.palette.graphics.Palette
-import coil.Coil
-import coil.request.ImageRequest
-import coil.request.SuccessResult
-import coil.size.Precision
+import com.xiaowei.player.data.EmbeddedCoverFetcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,27 +14,38 @@ object ThemeColorUtil {
     private const val COVER_SAMPLE_SIZE = 96
     private val cache = LruCache<String, Long>(64)
 
-    suspend fun extractFromUri(context: Context, imageUri: Uri?): Long? {
-        if (imageUri == null) return null
-        val key = imageUri.toString()
-        cache.get(key)?.let { return it }
+    suspend fun extractFromFilePath(filePath: String?): Long? {
+        if (filePath.isNullOrBlank()) return null
+        cache.get(filePath)?.let { return it }
 
         val result = runCatching {
-            val loader = Coil.imageLoader(context)
-            val request = ImageRequest.Builder(context)
-                .data(imageUri)
-                .allowHardware(false)
-                .bitmapConfig(Bitmap.Config.RGB_565)
-                .size(COVER_SAMPLE_SIZE)
-                .precision(Precision.INEXACT)
-                .build()
-            val imgResult = withContext(Dispatchers.IO) { loader.execute(request) }
-            val bitmap = drawableToBitmap((imgResult as? SuccessResult)?.drawable ?: return@runCatching null)
+            val bytes = withContext(Dispatchers.IO) {
+                EmbeddedCoverFetcher.loadCoverBytes(filePath)
+            } ?: return@runCatching null
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return@runCatching null
+            val opts = BitmapFactory.Options().apply {
+                inSampleSize = computeSample(bounds.outWidth, bounds.outHeight, COVER_SAMPLE_SIZE)
+            }
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts) ?: return@runCatching null
             withContext(Dispatchers.Default) { extract(bitmap) }
         }.getOrNull()
 
-        if (result != null) cache.put(key, result)
+        if (result != null) cache.put(filePath, result)
         return result
+    }
+
+    private fun computeSample(width: Int, height: Int, target: Int): Int {
+        var sample = 1
+        var w = width
+        var h = height
+        while (w / 2 >= target && h / 2 >= target) {
+            sample *= 2
+            w /= 2
+            h /= 2
+        }
+        return sample
     }
 
     fun seedLongToColor(argb: Long): Color = Color(argb.toInt())
@@ -56,17 +60,7 @@ object ThemeColorUtil {
                 palette.getDominantColor(0xFF808080.toInt())
             )
         )
+        bitmap.recycle()
         return baseColor.toLong() and 0xFFFFFFFFL
-    }
-
-    private fun drawableToBitmap(drawable: Drawable): Bitmap {
-        if (drawable is BitmapDrawable) return drawable.bitmap
-        val w = drawable.intrinsicWidth.coerceAtLeast(1)
-        val h = drawable.intrinsicHeight.coerceAtLeast(1)
-        val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        drawable.setBounds(0, 0, w, h)
-        drawable.draw(canvas)
-        return bitmap
     }
 }

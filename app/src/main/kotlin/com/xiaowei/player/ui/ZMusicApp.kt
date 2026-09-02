@@ -277,16 +277,16 @@ fun ShuYinApp(
     val inDetail = displayedDetail != Detail.None
 
     val coverColorEnabled = themePrefs.coverColorEnabledState.value
-    LaunchedEffect(currentSong?.albumArtUri, coverColorEnabled) {
+    LaunchedEffect(currentSong?.data, coverColorEnabled) {
         if (!coverColorEnabled) {
             themePrefs.coverColor = null
             return@LaunchedEffect
         }
-        val uri = currentSong?.albumArtUri
-        if (uri == null) {
+        val data = currentSong?.data
+        if (data == null) {
             themePrefs.coverColor = null
         } else {
-            val seedLong = com.xiaowei.player.ui.theme.ThemeColorUtil.extractFromUri(context, uri)
+            val seedLong = com.xiaowei.player.ui.theme.ThemeColorUtil.extractFromFilePath(data)
             themePrefs.coverColor = seedLong?.toInt()
         }
     }

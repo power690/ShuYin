@@ -6,8 +6,8 @@ import android.app.NotificationManager
 import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
-import coil.disk.DiskCache
 import coil.memory.MemoryCache
+import com.xiaowei.player.data.EmbeddedCoverFetcher
 import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.PlaybackPrefs
@@ -43,18 +43,26 @@ class ShuYinApp : Application(), ImageLoaderFactory {
             lyricsLoader = { song -> musicRepository.reloadLyrics(song) }
         )
         createNotificationChannel()
+        purgeCoverCaches()
+    }
+
+    private fun purgeCoverCaches() {
+        Thread {
+            try {
+                val coilCache = java.io.File(cacheDir, "coil_cache")
+                if (coilCache.exists()) {
+                    coilCache.deleteRecursively()
+                }
+            } catch (_: Throwable) {
+            }
+            EmbeddedCoverFetcher.purgeLegacyDiskCache(this)
+        }.start()
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .memoryCache {
             MemoryCache.Builder(this)
-                .maxSizePercent(0.25)
-                .build()
-        }
-        .diskCache {
-            DiskCache.Builder()
-                .directory(cacheDir.resolve("coil_cache"))
-                .maxSizeBytes(100L * 1024 * 1024)
+                .maxSizePercent(0.18)
                 .build()
         }
         .respectCacheHeaders(false)

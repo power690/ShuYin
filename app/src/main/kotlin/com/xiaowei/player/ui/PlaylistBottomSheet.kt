@@ -190,7 +190,6 @@ private fun PlaylistRow(
     ) {
 
         AlbumCover(
-            coverUri = song.albumArtUri,
             modifier = Modifier.size(38.dp),
             cornerRadius = 6,
             filePath = song.data

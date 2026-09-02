@@ -291,11 +291,11 @@ fun LibraryArtistTile(
             .padding(4.dp)
     ) {
         com.xiaowei.player.ui.components.AlbumCover(
-            coverUri = artist.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp),
             cornerRadius = 16,
+            coverSizePx = 384,
             filePath = artist.firstSongData
         )
         Spacer(Modifier.height(8.dp))
@@ -336,11 +336,11 @@ fun LibraryAlbumTile(
             .padding(4.dp)
     ) {
         com.xiaowei.player.ui.components.AlbumCover(
-            coverUri = album.albumArtUri,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp),
             cornerRadius = 16,
+            coverSizePx = 384,
             filePath = album.firstSongData
         )
         Spacer(Modifier.height(8.dp))

@@ -130,6 +130,28 @@ class MainActivity : ComponentActivity() {
             window.isNavigationBarContrastEnforced = false
             window.isStatusBarContrastEnforced = false
         }
+
+        try {
+            val dm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                display
+            } else {
+                @Suppress("DEPRECATION") windowManager.defaultDisplay
+            }
+            val currentMode = dm?.mode
+            val bestMode = dm?.supportedModes
+                ?.filter { mode ->
+                    currentMode == null ||
+                        (mode.physicalWidth == currentMode.physicalWidth &&
+                        mode.physicalHeight == currentMode.physicalHeight)
+                }
+                ?.maxByOrNull { it.refreshRate }
+            if (bestMode != null && bestMode.refreshRate > 60f) {
+                val attrs = window.attributes
+                attrs.preferredDisplayModeId = bestMode.modeId
+                window.attributes = attrs
+            }
+        } catch (_: Exception) {
+        }
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wasManageStorageGranted = android.os.Environment.isExternalStorageManager()

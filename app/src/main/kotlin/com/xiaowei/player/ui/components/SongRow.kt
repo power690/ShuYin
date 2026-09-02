@@ -39,7 +39,6 @@ fun SongRow(
     ) {
 
         AlbumCover(
-            coverUri = song.albumArtUri,
             modifier = Modifier.size(48.dp),
             cornerRadius = 8,
             filePath = song.data

@@ -284,7 +284,6 @@ private fun MiniPlayerContent(
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumCover(
-            coverUri = song.albumArtUri,
             modifier = Modifier.size(40.dp),
             cornerRadius = 7,
             filePath = song.data

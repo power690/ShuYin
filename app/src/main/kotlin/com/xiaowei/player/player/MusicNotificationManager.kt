@@ -270,7 +270,16 @@ class MusicNotificationManager(
             try {
                 val bytes = com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(songData)
                 val bitmap = if (bytes != null && bytes.isNotEmpty() && isActive) {
-                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                    val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                    if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                        var sample = 1
+                        while (bounds.outWidth / (sample * 2) >= 512 && bounds.outHeight / (sample * 2) >= 512) {
+                            sample *= 2
+                        }
+                        val opts = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+                        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                    } else null
                 } else null
 
                 if (bitmap != null && isActive) {

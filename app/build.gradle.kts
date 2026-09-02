@@ -17,8 +17,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 15
-        versionName = "1.8.0"
+        versionCode = 16
+        versionName = "1.8.1"
         vectorDrawables { useSupportLibrary = true }
 
         externalNativeBuild {

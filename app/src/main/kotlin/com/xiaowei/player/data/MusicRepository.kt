@@ -1,6 +1,5 @@
 package com.xiaowei.player.data
 
-import android.content.ContentUris
 import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
@@ -9,11 +8,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.mpatric.mp3agic.Mp3File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -44,11 +39,6 @@ class MusicRepository(private val context: Context) {
 
         val songs = mutableListOf<Song>()
 
-        val coverJobs = mutableListOf<Job>()
-
-        val coverSemaphore = Semaphore(12)
-
-        val loadedPaths = HashSet<String>()
         val mmr = MediaMetadataRetriever()
         try {
             context.contentResolver.query(
@@ -81,13 +71,6 @@ class MusicRepository(private val context: Context) {
                         val mime = cursor.getString(mimeCol)
                         val displayName = cursor.getString(displayCol) ?: title
 
-                        val artUri = if (albumId > 0) {
-                            ContentUris.withAppendedId(
-                                Uri.parse("content://media/external/audio/albumart"),
-                                albumId
-                            )
-                        } else null
-
                         val lyrics = readLyrics(data, mime, mmr)
 
                         songs.add(
@@ -104,25 +87,11 @@ class MusicRepository(private val context: Context) {
                                 dateAdded = cursor.getLong(dateCol),
                                 track = cursor.getInt(trackCol),
                                 year = cursor.getInt(yearCol),
-                                albumArtUri = artUri,
                                 lyrics = lyrics,
                                 mimeType = mime,
                                 size = cursor.getLong(sizeCol)
                             )
                         )
-
-                        if (data.isNotBlank() && loadedPaths.add(data)) {
-                            val job = launch {
-                                coverSemaphore.withPermit {
-                                    try {
-                                        EmbeddedCoverFetcher.loadCoverUri(data, context)
-                                    } catch (_: Exception) {
-
-                                    }
-                                }
-                            }
-                            coverJobs.add(job)
-                        }
                     }
                 }
             }
@@ -132,9 +101,7 @@ class MusicRepository(private val context: Context) {
             try { mmr.release() } catch (_: Exception) {}
         }
 
-        coverJobs.forEach { it.join() }
-
-        Log.i(TAG, "Loaded ${songs.size} songs from MediaStore (covers preloaded)")
+        Log.i(TAG, "Loaded ${songs.size} songs from MediaStore")
         songs
     }
 
@@ -147,9 +114,6 @@ class MusicRepository(private val context: Context) {
 
         val supportedExtensions = setOf("mp3", "flac", "ogg", "m4a", "aac", "wav", "opus")
         val songs = mutableListOf<Song>()
-        val coverJobs = mutableListOf<Job>()
-        val coverSemaphore = Semaphore(12)
-        val loadedPaths = HashSet<String>()
         val mmr = MediaMetadataRetriever()
 
         try {
@@ -181,13 +145,6 @@ class MusicRepository(private val context: Context) {
                         val albumId = "$artist|$album".hashCode().toLong() and 0xFFFFFFFFL
                         val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
 
-                        val artUri = if (albumId > 0) {
-                            ContentUris.withAppendedId(
-                                Uri.parse("content://media/external/audio/albumart"),
-                                albumId
-                            )
-                        } else null
-
                         val lyrics = readLyrics(filePath, mimeTypeStr, MediaMetadataRetriever())
 
                         songs.add(
@@ -204,24 +161,12 @@ class MusicRepository(private val context: Context) {
                                 dateAdded = file.lastModified() / 1000,
                                 track = track,
                                 year = year,
-                                albumArtUri = artUri,
                                 lyrics = lyrics,
                                 mimeType = mimeTypeStr,
                                 size = file.length(),
                                 source = "custom_path"  
                             )
                         )
-
-                        if (loadedPaths.add(filePath)) {
-                            val job = launch {
-                                coverSemaphore.withPermit {
-                                    try {
-                                        EmbeddedCoverFetcher.loadCoverUri(filePath, context)
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                            coverJobs.add(job)
-                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to read metadata: $filePath - ${e.message}")
                     }
@@ -233,7 +178,6 @@ class MusicRepository(private val context: Context) {
             try { mmr.release() } catch (_: Exception) {}
         }
 
-        coverJobs.forEach { it.join() }
         Log.i(TAG, "Loaded ${songs.size} songs from custom path: $rootPath")
         songs
     }
@@ -395,7 +339,6 @@ class MusicRepository(private val context: Context) {
                 name = name,
                 songCount = list.size,
                 albumCount = list.distinctBy { it.albumId }.size,
-                albumArtUri = firstSong.albumArtUri,
                 totalDuration = list.sumOf { it.duration },
 
                 firstSongData = firstSong.data
@@ -419,7 +362,6 @@ class MusicRepository(private val context: Context) {
                     artist = first.albumArtist ?: first.displayArtist,
                     year = list.mapNotNull { if (it.year > 0) it.year else null }.maxOrNull() ?: 0,
                     songCount = list.size,
-                    albumArtUri = first.albumArtUri,
                     totalDuration = list.sumOf { it.duration },
                     firstSongData = first.data
                 )
@@ -442,7 +384,6 @@ class MusicRepository(private val context: Context) {
                 RecommendCard(
                     title = com.xiaowei.player.i18n.Strings.get("recommend_random_title"),
                     subtitle = com.xiaowei.player.i18n.Strings.get("recommend_random_subtitle", picked.size),
-                    coverUri = picked.first().albumArtUri,
                     songs = picked
                 )
             )
@@ -458,7 +399,6 @@ class MusicRepository(private val context: Context) {
                 RecommendCard(
                     title = com.xiaowei.player.i18n.Strings.get("recommend_long_title"),
                     subtitle = com.xiaowei.player.i18n.Strings.get("recommend_long_subtitle", longTracks.size),
-                    coverUri = longTracks.first().albumArtUri,
                     songs = longTracks
                 )
             )

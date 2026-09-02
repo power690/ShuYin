@@ -40,33 +40,34 @@ import kotlinx.coroutines.withContext
 @Composable
 fun AlbumCover(
 
-    @Suppress("UNUSED_PARAMETER") coverUri: Uri?,
     modifier: Modifier = Modifier,
     cornerRadius: Int = 12,
+    coverSizePx: Int = 128,
 
     filePath: String? = null
 ) {
     val context = LocalContext.current
 
-    var currentUri by remember(filePath) {
-        mutableStateOf(EmbeddedCoverFetcher.getCachedUriSync(filePath))
+    var coverBytes by remember(filePath) {
+        mutableStateOf(EmbeddedCoverFetcher.getCachedBytesSync(filePath))
     }
 
-    if (currentUri == null && !filePath.isNullOrBlank()) {
+    if (coverBytes == null && !filePath.isNullOrBlank()) {
         LaunchedEffect(filePath) {
-            val uri = withContext(Dispatchers.IO) {
-                EmbeddedCoverFetcher.loadCoverUri(filePath, context)
+            val bytes = withContext(Dispatchers.IO) {
+                EmbeddedCoverFetcher.loadCoverBytes(filePath)
             }
-            currentUri = uri
+            coverBytes = bytes
         }
     }
 
-    val imageRequest = remember(currentUri) {
-        if (currentUri != null) {
+    val imageRequest = remember(coverBytes, coverSizePx) {
+        if (coverBytes != null && !filePath.isNullOrBlank()) {
             ImageRequest.Builder(context)
-                .data(currentUri)
+                .data(coverBytes)
                 .crossfade(false)
-                .memoryCacheKey(currentUri.toString())
+                .size(coverSizePx)
+                .memoryCacheKey("cover_$coverSizePx\u0000$filePath")
                 .build()
         } else null
     }

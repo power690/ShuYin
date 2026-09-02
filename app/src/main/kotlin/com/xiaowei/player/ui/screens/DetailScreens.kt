@@ -43,7 +43,6 @@ import com.xiaowei.player.i18n.Strings
 private fun DetailHeaderCard(
     title: String,
     subtitle: String,
-    coverUri: android.net.Uri?,
     onClick: () -> Unit,
     filePath: String? = null
 ) {
@@ -58,9 +57,9 @@ private fun DetailHeaderCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AlbumCover(
-                coverUri = coverUri,
                 modifier = Modifier.fillMaxSize(),
                 cornerRadius = 16,
+                coverSizePx = 384,
                 filePath = filePath
             )
             GradientScrim(
@@ -151,7 +150,6 @@ fun ArtistDetailScreen(
                 DetailHeaderCard(
                     title = artistName,
                     subtitle = Strings.get("song_count", artist?.songCount ?: songs.size),
-                    coverUri = artist?.albumArtUri,
                     onClick = { onPlayAll(songs, 0) },
                     filePath = artist?.firstSongData ?: songs.firstOrNull()?.data
                 )
@@ -234,7 +232,6 @@ fun AlbumDetailScreen(
                 DetailHeaderCard(
                     title = album?.displayName ?: Strings.get("unknown_album"),
                     subtitle = album?.displayAlbumDashArtist ?: Strings.get("unknown_artist"),
-                    coverUri = album?.albumArtUri,
                     onClick = { onPlayAll(songs, 0) },
                     filePath = album?.firstSongData ?: songs.firstOrNull()?.data
                 )
