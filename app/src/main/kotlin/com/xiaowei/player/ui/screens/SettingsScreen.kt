@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
@@ -57,7 +58,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
@@ -85,6 +85,7 @@ import com.xiaowei.player.data.CustomPathPrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
+import com.xiaowei.player.ui.components.M3ExpressiveSwitch
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 
 private enum class SettingIconTone {
@@ -217,7 +218,7 @@ private fun ExpressiveSettingItem(
                 }
             }
             if (checked != null) {
-                Switch(
+                M3ExpressiveSwitch(
                     checked = checked,
                     enabled = switchEnabled,
                     onCheckedChange = onCheckedChange
@@ -516,6 +517,17 @@ fun SettingsScreen(
             )
 
             ExpressiveSettingItem(
+                icon = Icons.Outlined.Lyrics,
+                tone = SettingIconTone.SECONDARY,
+                title = Strings.get("settings_immersive_lyrics"),
+                subtitle = Strings.get("settings_immersive_lyrics_desc"),
+                checked = themePrefs.immersiveLyricsState.value,
+                onCheckedChange = { newValue ->
+                    themePrefs.immersiveLyrics = newValue
+                }
+            )
+
+            ExpressiveSettingItem(
                 icon = Icons.Outlined.Folder,
                 tone = SettingIconTone.TERTIARY,
                 title = Strings.get("settings_custom_path"),
@@ -801,34 +813,46 @@ private fun ColorBall(
 
 private fun uriToFilePath(uri: Uri, context: android.content.Context): String? {
     val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
-    val split = docId.split(":")
+    val split = docId.split(":", limit = 2)
     if (split.size < 2) return null
 
     val type = split[0]
     val relativePath = split[1]
+    val decoded = try {
+        java.net.URLDecoder.decode(relativePath, "UTF-8")
+    } catch (_: Exception) {
+        relativePath
+    }
 
     return when (type) {
-        "primary" -> {
-
-            val decoded = try {
-                java.net.URLDecoder.decode(relativePath, "UTF-8")
-            } catch (_: Exception) {
-                relativePath
-            }
-            "${Environment.getExternalStorageDirectory().absolutePath}/$decoded"
-        }
-        "home" -> {
-
-            val decoded = try {
-                java.net.URLDecoder.decode(relativePath, "UTF-8")
-            } catch (_: Exception) {
-                relativePath
-            }
+        "primary", "home" -> {
             "${Environment.getExternalStorageDirectory().absolutePath}/$decoded"
         }
         else -> {
-
-            null
+            var baseDir: java.io.File? = null
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                try {
+                    val sm = context.getSystemService(android.content.Context.STORAGE_SERVICE) as android.os.storage.StorageManager
+                    for (vol in sm.storageVolumes) {
+                        if (vol.uuid == type) {
+                            baseDir = vol.directory
+                            break
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            if (baseDir == null) {
+                val fallback = java.io.File("/storage/$type")
+                if (fallback.isDirectory) {
+                    baseDir = fallback
+                }
+            }
+            if (baseDir != null && baseDir.isDirectory) {
+                java.io.File(baseDir, decoded).absolutePath
+            } else {
+                null
+            }
         }
     }
 }

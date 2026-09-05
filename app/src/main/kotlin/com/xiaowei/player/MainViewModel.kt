@@ -144,31 +144,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     }
 
+    fun removeFavorites(songIds: List<Long>) {
+        if (songIds.isEmpty()) return
+        songIds.forEach { favoriteRepo.removeSync(it) }
+        _library.value = _library.value.copy(
+            favoriteIds = favoriteRepo.getFavoriteIdsSync(),
+            favoriteVersion = _library.value.favoriteVersion + 1
+        )
+    }
+
     fun isFavorite(songId: Long): Boolean = favoriteRepo.isFavoriteSync(songId)
 
     fun playSong(song: Song) {
-        val list = _library.value.filteredSongs.ifEmpty { _library.value.songs }
-        val idx = list.indexOfFirst { it.id == song.id }
-        if (idx >= 0) {
-            playerManager.playQueue(list, idx)
-        } else {
-            playerManager.playQueue(listOf(song), 0)
-        }
+        playerManager.requestPlaySong(song)
     }
 
     fun playSongFromList(songs: List<Song>, song: Song) {
-        if (songs.isEmpty()) return
-        val idx = songs.indexOfFirst { it.id == song.id }
-        if (idx >= 0) {
-            playerManager.playQueue(songs, idx)
-        } else {
-
-            playerManager.playQueue(listOf(song), 0)
-        }
+        playerManager.requestPlaySong(song)
     }
 
-    fun playAll(songs: List<Song>, startIndex: Int = 0) {
-        if (songs.isNotEmpty()) playerManager.playQueue(songs, startIndex)
+    fun playAll(songs: List<Song>) {
+        if (songs.isNotEmpty()) playerManager.addAllToQueue(songs)
     }
 
     override fun onCleared() {

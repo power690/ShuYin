@@ -23,7 +23,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.HorizontalDivider
@@ -261,6 +260,7 @@ fun MineScreen(
             icon = Icons.Outlined.FavoriteBorder,
             tone = MineIconTone.ERROR,
             title = Strings.get("favorite"),
+            showDivider = false,
             onClick = { onOpenFavorite() }
         )
 
@@ -268,15 +268,8 @@ fun MineScreen(
             icon = Icons.Outlined.Settings,
             tone = MineIconTone.SECONDARY,
             title = Strings.get("settings_title"),
-            onClick = { onOpenSettings() }
-        )
-
-        MineActionItem(
-            icon = Icons.Outlined.AutoAwesome,
-            tone = MineIconTone.TERTIARY,
-            title = Strings.get("lyric_synth_entry"),
             showDivider = false,
-            onClick = { onOpenLyricSynth() }
+            onClick = { onOpenSettings() }
         )
     }
 

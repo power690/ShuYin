@@ -75,7 +75,11 @@ import com.xiaowei.player.data.Song
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
 import com.xiaowei.player.ui.components.GradientScrim
+import com.xiaowei.player.ui.components.PlayAllButton
+import com.xiaowei.player.ui.components.SortButton
+import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
+import com.xiaowei.player.ui.components.sortSongs
 import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
 import kotlinx.coroutines.Dispatchers
@@ -89,7 +93,7 @@ fun RecommendScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenPlayer: () -> Unit,
@@ -442,11 +446,14 @@ fun RecommendDetailScreen(
     card: RecommendCard,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
     val songs = card.songs
+
+    var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
+    val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
 
     Column(
         modifier = Modifier
@@ -493,7 +500,7 @@ fun RecommendDetailScreen(
                 ) {
                     RecommendCardItem(
                         card = card,
-                        onClick = { onPlayAll(songs, 0) },
+                        onClick = { onPlayAll(sortedSongs) },
                         fillWidth = true,
                         cardHeight = 220
                     )
@@ -512,6 +519,21 @@ fun RecommendDetailScreen(
             )
         }
 
+        if (songs.isNotEmpty()) {
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PlayAllButton(
+                        onPlayAll = { onPlayAll(sortedSongs) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    SortButton(
+                        sortOption = sortOption,
+                        onSortOptionChange = { sortOption = it }
+                    )
+                }
+            }
+        }
+
         if (songs.isEmpty()) {
             item {
                 Box(
@@ -526,14 +548,14 @@ fun RecommendDetailScreen(
                 }
             }
         } else {
-            items(songs, key = { it.id }) { song ->
+            items(sortedSongs, key = { it.id }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
                     isCurrent = playerState.currentSong?.id == song.id,
                     onClick = {
                         if (playerState.currentSong?.id == song.id) onOpenPlayer()
-                        else onPlaySong(song, songs)
+                        else onPlaySong(song, sortedSongs)
                     }
                 )
             }
@@ -548,7 +570,7 @@ fun SearchScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
@@ -614,6 +636,9 @@ fun SearchScreen(
             it.album.contains(q, true)
         }
     }
+
+    var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
+    val sortedResults = remember(results, sortOption) { sortSongs(results, sortOption) }
 
     Column(
         modifier = Modifier
@@ -787,7 +812,19 @@ fun SearchScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
                 }
-                items(results, key = { it.id }) { song ->
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayAllButton(
+                            onPlayAll = { onPlayAll(sortedResults) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SortButton(
+                            sortOption = sortOption,
+                            onSortOptionChange = { sortOption = it }
+                        )
+                    }
+                }
+                items(sortedResults, key = { it.id }) { song ->
                     SongRow(
                         song = song,
                         isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
@@ -796,7 +833,7 @@ fun SearchScreen(
 
                             hideKeyboardAndClearFocus()
                             if (playerState.currentSong?.id == song.id) onOpenPlayer()
-                            else onPlaySong(song, results)
+                            else onPlaySong(song, sortedResults)
                         }
                     )
                 }

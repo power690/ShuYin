@@ -32,8 +32,10 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
@@ -44,7 +46,11 @@ import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
+import com.xiaowei.player.ui.components.PlayAllButton
+import com.xiaowei.player.ui.components.SortButton
+import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
+import com.xiaowei.player.ui.components.sortSongs
 import kotlinx.coroutines.launch
 
 private enum class LibraryTab(val labelKey: String) {
@@ -58,7 +64,7 @@ fun LibraryScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onSearch: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenAlbum: (Long) -> Unit,
@@ -122,6 +128,7 @@ fun LibraryScreen(
                     library = library,
                     playerState = playerState,
                     onPlaySong = onPlaySong,
+                    onPlayAll = onPlayAll,
                     onOpenPlayer = onOpenPlayer,
                     bottomPadding = bottomPadding
                 )
@@ -145,9 +152,11 @@ private fun SongsPane(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onOpenPlayer: () -> Unit,
     bottomPadding: Dp = 168.dp
 ) {
+    var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
     val songs = library.filteredSongs
     if (songs.isEmpty()) {
         Box(
@@ -163,13 +172,25 @@ private fun SongsPane(
         }
         return
     }
+    val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding)
     ) {
-
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlayAllButton(
+                    onPlayAll = { onPlayAll(sortedSongs) },
+                    modifier = Modifier.weight(1f)
+                )
+                SortButton(
+                    sortOption = sortOption,
+                    onSortOptionChange = { sortOption = it }
+                )
+            }
+        }
         items(
-            items = songs,
+            items = sortedSongs,
             key = { it.id },
             contentType = { "song_row" }
         ) { song ->

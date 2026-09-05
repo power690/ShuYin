@@ -218,6 +218,7 @@ class MainActivity : ComponentActivity() {
                             onRemoveFromQueue = viewModel.playerManager::removeFromQueue,
                             onClearQueue = viewModel.playerManager::clearQueue,
                             onToggleFavorite = viewModel::toggleFavorite,
+                            onRemoveFavorites = viewModel::removeFavorites,
                             floatingLyricEnabled = floatingLyricEnabled,
                             onToggleFloatingLyric = { toggleFloatingLyric() },
                             onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) }

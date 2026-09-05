@@ -16,6 +16,7 @@ class ThemePrefs private constructor(context: Context) {
     val coverColorState = mutableStateOf<Int?>(null)
     val materialStyleState = mutableStateOf(prefs.getString(KEY_MATERIAL_STYLE, DEFAULT_MATERIAL_STYLE) ?: DEFAULT_MATERIAL_STYLE)
     val playerStyleState = mutableStateOf(prefs.getString(KEY_PLAYER_STYLE, DEFAULT_PLAYER_STYLE) ?: DEFAULT_PLAYER_STYLE)
+    val immersiveLyricsState = mutableStateOf(prefs.getBoolean(KEY_IMMERSIVE_LYRICS, false))
     val lastPrimaryColorState = mutableStateOf(prefs.getInt(KEY_LAST_PRIMARY_COLOR, DEFAULT_PRIMARY_COLOR))
 
     private val colorChangedListeners = CopyOnWriteArrayList<() -> Unit>()
@@ -80,6 +81,13 @@ class ThemePrefs private constructor(context: Context) {
             prefs.edit().putString(KEY_PLAYER_STYLE, value).apply()
         }
 
+    var immersiveLyrics: Boolean
+        get() = immersiveLyricsState.value
+        set(value) {
+            immersiveLyricsState.value = value
+            prefs.edit().putBoolean(KEY_IMMERSIVE_LYRICS, value).apply()
+        }
+
     var lastPrimaryColor: Int
         get() = lastPrimaryColorState.value
         set(value) {
@@ -96,6 +104,7 @@ class ThemePrefs private constructor(context: Context) {
         private const val KEY_COVER_COLOR = "cover_color_enabled"
         private const val KEY_MATERIAL_STYLE = "material_style"
         private const val KEY_PLAYER_STYLE = "player_style"
+        private const val KEY_IMMERSIVE_LYRICS = "immersive_lyrics"
         private const val KEY_LAST_PRIMARY_COLOR = "last_primary_color"
         const val MATERIAL_STYLE_LIQUID = "liquid"
         const val MATERIAL_STYLE_FROSTED = "frosted"

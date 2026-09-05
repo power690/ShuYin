@@ -104,7 +104,7 @@ fun ShuYinApp(
     playerState: MusicPlayerManager.PlayerState,
     playerPlaylist: List<com.xiaowei.player.data.Song>,
     onPlaySong: (com.xiaowei.player.data.Song, List<com.xiaowei.player.data.Song>) -> Unit,
-    onPlayAll: (List<com.xiaowei.player.data.Song>, Int) -> Unit,
+    onPlayAll: (List<com.xiaowei.player.data.Song>) -> Unit,
     onRefresh: () -> Unit,
     onSearch: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -116,6 +116,7 @@ fun ShuYinApp(
     onRemoveFromQueue: (Int) -> Unit,
     onClearQueue: () -> Unit,
     onToggleFavorite: (Long) -> Unit,
+    onRemoveFavorites: (List<Long>) -> Unit = {},
     floatingLyricEnabled: Boolean = false,
     onToggleFloatingLyric: () -> Unit = {},
     onCustomPathConfirm: (String) -> Unit = {}
@@ -557,6 +558,8 @@ fun ShuYinApp(
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
+                                    onPlayAll = onPlayAll,
+                                    onRemoveFavorites = onRemoveFavorites,
                                     onBack = { popDetail() },
                                     onOpenPlayer = { playerExpanded = true }
                                 )

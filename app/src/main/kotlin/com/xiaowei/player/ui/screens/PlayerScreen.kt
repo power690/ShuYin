@@ -9,8 +9,10 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
@@ -141,6 +143,9 @@ fun PlayerScreen(
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var showPlaylist by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
+    val immersiveLyrics = themePrefs.immersiveLyricsState.value
+    val controlsVisible = !(immersiveLyrics && showLyrics)
 
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -420,6 +425,16 @@ fun PlayerScreen(
 
                 Spacer(Modifier.height(20.dp))
 
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(350, easing = FastOutSlowInEasing)) +
+                            expandVertically(tween(350, easing = FastOutSlowInEasing)),
+                    exit = fadeOut(tween(350, easing = FastOutSlowInEasing)) +
+                           shrinkVertically(tween(350, easing = FastOutSlowInEasing))
+                ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -564,6 +579,8 @@ fun PlayerScreen(
                             modifier = Modifier.size(22.dp)
                         )
                     }
+                }
+                }
                 }
 
                 Spacer(Modifier.weight(0.05f))

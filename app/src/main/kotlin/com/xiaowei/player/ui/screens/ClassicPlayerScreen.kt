@@ -9,8 +9,10 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
@@ -143,6 +145,9 @@ fun ClassicPlayerScreen(
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var showPlaylist by remember { mutableStateOf(false) }
     val context = androidx.compose.ui.platform.LocalContext.current
+    val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
+    val immersiveLyrics = themePrefs.immersiveLyricsState.value
+    val controlsVisible = !(immersiveLyrics && showLyrics)
 
     val statusBarView = androidx.compose.ui.platform.LocalView.current
     androidx.compose.runtime.DisposableEffect(Unit) {
@@ -471,6 +476,16 @@ fun ClassicPlayerScreen(
 
                 Spacer(Modifier.height(20.dp))
 
+                AnimatedVisibility(
+                    visible = controlsVisible,
+                    enter = fadeIn(tween(350, easing = FastOutSlowInEasing)) +
+                            expandVertically(tween(350, easing = FastOutSlowInEasing)),
+                    exit = fadeOut(tween(350, easing = FastOutSlowInEasing)) +
+                           shrinkVertically(tween(350, easing = FastOutSlowInEasing))
+                ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -651,6 +666,8 @@ fun ClassicPlayerScreen(
                             modifier = Modifier.size(22.dp)
                         )
                     }
+                }
+                }
                 }
 
                 Spacer(Modifier.weight(0.05f))

@@ -24,6 +24,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,7 +39,11 @@ import com.xiaowei.player.data.Song
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
 import com.xiaowei.player.ui.components.GradientScrim
+import com.xiaowei.player.ui.components.PlayAllButton
+import com.xiaowei.player.ui.components.SortButton
+import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
+import com.xiaowei.player.ui.components.sortSongs
 import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
 
@@ -101,7 +109,7 @@ fun ArtistDetailScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onBack: () -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenPlayer: () -> Unit
@@ -111,6 +119,9 @@ fun ArtistDetailScreen(
     val songs = library.artistSongMap[artistName]
         ?.sortedWith(compareBy({ it.album }, { it.track }))
         ?: emptyList()
+
+    var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
+    val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
 
     Column(
         modifier = Modifier
@@ -150,7 +161,7 @@ fun ArtistDetailScreen(
                 DetailHeaderCard(
                     title = artistName,
                     subtitle = Strings.get("song_count", artist?.songCount ?: songs.size),
-                    onClick = { onPlayAll(songs, 0) },
+                    onClick = { onPlayAll(sortedSongs) },
                     filePath = artist?.firstSongData ?: songs.firstOrNull()?.data
                 )
             }
@@ -165,14 +176,29 @@ fun ArtistDetailScreen(
                 )
             }
 
-            items(songs, key = { it.id }) { song ->
+            if (songs.isNotEmpty()) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayAllButton(
+                            onPlayAll = { onPlayAll(sortedSongs) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SortButton(
+                            sortOption = sortOption,
+                            onSortOptionChange = { sortOption = it }
+                        )
+                    }
+                }
+            }
+
+            items(sortedSongs, key = { it.id }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
                     isCurrent = playerState.currentSong?.id == song.id,
                     onClick = {
                         if (playerState.currentSong?.id == song.id) onOpenPlayer()
-                        else onPlaySong(song, songs)
+                        else onPlaySong(song, sortedSongs)
                     }
                 )
             }
@@ -186,13 +212,16 @@ fun AlbumDetailScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>, Int) -> Unit,
+    onPlayAll: (List<Song>) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
     val album = library.albums.firstOrNull { it.id == albumId }
     val songs = library.songs.filter { it.albumId == albumId }
         .sortedWith(compareBy({ it.track }, { it.title }))
+
+    var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
+    val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
 
     Column(
         modifier = Modifier
@@ -232,7 +261,7 @@ fun AlbumDetailScreen(
                 DetailHeaderCard(
                     title = album?.displayName ?: Strings.get("unknown_album"),
                     subtitle = album?.displayAlbumDashArtist ?: Strings.get("unknown_artist"),
-                    onClick = { onPlayAll(songs, 0) },
+                    onClick = { onPlayAll(sortedSongs) },
                     filePath = album?.firstSongData ?: songs.firstOrNull()?.data
                 )
             }
@@ -247,14 +276,29 @@ fun AlbumDetailScreen(
                 )
             }
 
-            items(songs, key = { it.id }) { song ->
+            if (songs.isNotEmpty()) {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PlayAllButton(
+                            onPlayAll = { onPlayAll(sortedSongs) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        SortButton(
+                            sortOption = sortOption,
+                            onSortOptionChange = { sortOption = it }
+                        )
+                    }
+                }
+            }
+
+            items(sortedSongs, key = { it.id }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
                     isCurrent = playerState.currentSong?.id == song.id,
                     onClick = {
                         if (playerState.currentSong?.id == song.id) onOpenPlayer()
-                        else onPlaySong(song, songs)
+                        else onPlaySong(song, sortedSongs)
                     }
                 )
             }

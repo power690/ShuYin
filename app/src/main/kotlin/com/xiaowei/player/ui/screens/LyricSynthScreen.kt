@@ -98,7 +98,7 @@ fun LyricSynthScreen(onBack: () -> Unit) {
         ActivityResultContracts.OpenDocumentTree()
     ) { uri: Uri? ->
         if (uri != null) {
-            val realPath = uriToFilePath(uri)
+            val realPath = uriToFilePath(uri, context)
             if (realPath != null) {
                 selectedPath = realPath
                 selectedIds = emptySet()
@@ -500,21 +500,46 @@ private fun scanForSynth(path: String): List<SynthItem> {
     return result
 }
 
-private fun uriToFilePath(uri: Uri): String? {
+private fun uriToFilePath(uri: Uri, context: android.content.Context): String? {
     val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
-    val split = docId.split(":")
+    val split = docId.split(":", limit = 2)
     if (split.size < 2) return null
     val type = split[0]
     val relativePath = split[1]
+    val decoded = try {
+        java.net.URLDecoder.decode(relativePath, "UTF-8")
+    } catch (_: Exception) {
+        relativePath
+    }
     return when (type) {
         "primary", "home" -> {
-            val decoded = try {
-                java.net.URLDecoder.decode(relativePath, "UTF-8")
-            } catch (_: Exception) {
-                relativePath
-            }
             "${Environment.getExternalStorageDirectory().absolutePath}/$decoded"
         }
-        else -> null
+        else -> {
+            var baseDir: java.io.File? = null
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                try {
+                    val sm = context.getSystemService(android.content.Context.STORAGE_SERVICE) as android.os.storage.StorageManager
+                    for (vol in sm.storageVolumes) {
+                        if (vol.uuid == type) {
+                            baseDir = vol.directory
+                            break
+                        }
+                    }
+                } catch (_: Exception) {
+                }
+            }
+            if (baseDir == null) {
+                val fallback = java.io.File("/storage/$type")
+                if (fallback.isDirectory) {
+                    baseDir = fallback
+                }
+            }
+            if (baseDir != null && baseDir.isDirectory) {
+                java.io.File(baseDir, decoded).absolutePath
+            } else {
+                null
+            }
+        }
     }
 }
