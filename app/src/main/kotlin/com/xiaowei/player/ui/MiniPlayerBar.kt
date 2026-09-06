@@ -8,8 +8,6 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,16 +25,13 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,45 +66,55 @@ import kotlin.math.abs
 private fun Modifier.miniPlayerStretch(
     stretchOffset: Animatable<Offset, AnimationVector2D>,
     stretchScope: CoroutineScope,
-    stretchSpring: SpringSpec<Offset>
+    stretchSpring: SpringSpec<Offset>,
+    onStretchActive: () -> Unit,
+    onStretchSettled: () -> Unit
 ): Modifier = this
     .graphicsLayer {
+        val ox = stretchOffset.value.x
         val oy = stretchOffset.value.y
+        val edgeBudget = 40.dp.toPx()
         val growY = (abs(oy) / (density * 26f)).coerceIn(0f, 0.35f)
+        val growPx = (abs(ox) * 0.35f).coerceAtMost(
+            (edgeBudget - abs(ox) * 0.3f).coerceAtLeast(0f)
+        )
+        val growX = if (size.width > 0f) growPx / size.width else 0f
+        translationX = ox * 0.3f
         translationY = oy * 0.3f
+        scaleX = 1f + growX
         scaleY = 1f + growY
-        transformOrigin = TransformOrigin(0.5f, if (oy >= 0f) 0f else 1f)
+        transformOrigin = TransformOrigin(
+            if (ox >= 0f) 0f else 1f,
+            if (oy >= 0f) 0f else 1f
+        )
     }
     .pointerInput(Unit) {
-        var skipStretch = false
-        val progressZone = 24.dp.toPx()
         inspectDragGestures(
             directionalLock = true,
-            onDragStart = { down ->
-                skipStretch = down.position.y > size.height - progressZone
-            },
             onDragEnd = {
-                if (!skipStretch) {
-                    stretchScope.launch {
-                        stretchOffset.animateTo(Offset.Zero, stretchSpring)
-                    }
+                stretchScope.launch {
+                    stretchOffset.animateTo(Offset.Zero, stretchSpring)
+                    onStretchSettled()
                 }
             },
             onDragCancel = {
-                if (!skipStretch) {
-                    stretchScope.launch {
-                        stretchOffset.animateTo(Offset.Zero, stretchSpring)
-                    }
+                stretchScope.launch {
+                    stretchOffset.animateTo(Offset.Zero, stretchSpring)
+                    onStretchSettled()
                 }
             }
-        ) { _, dragAmount ->
-            if (skipStretch) return@inspectDragGestures
+        ) { change, dragAmount ->
+            if (dragAmount == Offset.Zero) return@inspectDragGestures
+            val maxX = 110.dp.toPx()
             val maxY = 44.dp.toPx()
+            val vx = stretchOffset.value.x + dragAmount.x
             val vy = stretchOffset.value.y + dragAmount.y
             val next = Offset(
-                0f,
+                maxX * vx / (maxX + abs(vx)),
                 maxY * vy / (maxY + abs(vy))
             )
+            if (next != Offset.Zero) onStretchActive()
+            change.consume()
             stretchScope.launch {
                 stretchOffset.snapTo(next)
             }
@@ -120,33 +125,33 @@ private fun Modifier.miniPlayerStretch(
 fun MiniPlayerBar(
     song: Song,
     isPlaying: Boolean,
-    positionMs: Long,
-    durationMs: Long,
     onPlayPause: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
-    onSeek: (Long) -> Unit,
     onClick: () -> Unit,
     glassBackdrop: Backdrop? = null,
     forceFrosted: Boolean = false
 ) {
 
     if (glassBackdrop != null && LiquidGlassEnabled) {
-        val glassShape = RoundedCornerShape(30.dp)
+        val glassShape = RoundedCornerShape(34.dp)
         val fullEffects = !forceFrosted && LiquidGlassFullEffects
         val midEffects = forceFrosted || LiquidGlassMidEffects
         val stretchOffset = remember {
             Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
         }
         val stretchScope = rememberCoroutineScope()
+        val suppressClick = remember { mutableStateOf(false) }
         val stretchSpring = spring(
             dampingRatio = 0.3f,
             stiffness = 380f,
             visibilityThreshold = Offset.VisibilityThreshold
         )
         val openPlayer = {
-            stretchScope.launch { stretchOffset.snapTo(Offset.Zero) }
-            onClick()
+            if (!suppressClick.value) {
+                stretchScope.launch { stretchOffset.snapTo(Offset.Zero) }
+                onClick()
+            }
         }
         val surfaceColor =
             if (LiquidGlassMidEffects) {
@@ -161,8 +166,14 @@ fun MiniPlayerBar(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp)
-                .miniPlayerStretch(stretchOffset, stretchScope, stretchSpring)
+                .padding(horizontal = 16.dp)
+                .miniPlayerStretch(
+                    stretchOffset,
+                    stretchScope,
+                    stretchSpring,
+                    { suppressClick.value = true },
+                    { suppressClick.value = false }
+                )
                 .drawBackdrop(
                     backdrop = glassBackdrop,
                     shape = { glassShape },
@@ -189,17 +200,15 @@ fun MiniPlayerBar(
                     },
                     onDrawSurface = { drawRect(surfaceColor) }
                 )
+                .clip(glassShape)
                 .clickable(onClick = openPlayer)
         ) {
             MiniPlayerContent(
                 song = song,
                 isPlaying = isPlaying,
-                positionMs = positionMs,
-                durationMs = durationMs,
-                onPlayPause = onPlayPause,
-                onPrev = onPrev,
-                onNext = onNext,
-                onSeek = onSeek
+                onPlayPause = { if (!suppressClick.value) onPlayPause() },
+                onPrev = { if (!suppressClick.value) onPrev() },
+                onNext = { if (!suppressClick.value) onNext() }
             )
         }
     } else {
@@ -207,6 +216,7 @@ fun MiniPlayerBar(
             Animatable(Offset.Zero, Offset.VectorConverter, Offset.VisibilityThreshold)
         }
         val stretchScope = rememberCoroutineScope()
+        val suppressClick = remember { mutableStateOf(false) }
         val stretchSpring = spring(
             dampingRatio = 0.3f,
             stiffness = 380f,
@@ -214,23 +224,29 @@ fun MiniPlayerBar(
         )
         Surface(
             tonalElevation = 1.dp,
+            shape = RoundedCornerShape(34.dp),
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .miniPlayerStretch(stretchOffset, stretchScope, stretchSpring)
-                    .clickable(onClick = onClick)
+                    .padding(horizontal = 16.dp)
+                    .miniPlayerStretch(
+                        stretchOffset,
+                        stretchScope,
+                        stretchSpring,
+                        { suppressClick.value = true },
+                        { suppressClick.value = false }
+                    )
+                    .clip(RoundedCornerShape(34.dp))
+                    .clickable(onClick = { if (!suppressClick.value) onClick() })
             ) {
                 MiniPlayerContent(
                     song = song,
                     isPlaying = isPlaying,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    onPlayPause = onPlayPause,
-                    onPrev = onPrev,
-                    onNext = onNext,
-                    onSeek = onSeek
+                    onPlayPause = { if (!suppressClick.value) onPlayPause() },
+                    onPrev = { if (!suppressClick.value) onPrev() },
+                    onNext = { if (!suppressClick.value) onNext() }
                 )
             }
         }
@@ -269,18 +285,14 @@ private fun MiniPlayerButton(
 private fun MiniPlayerContent(
     song: Song,
     isPlaying: Boolean,
-    positionMs: Long,
-    durationMs: Long,
     onPlayPause: () -> Unit,
     onPrev: () -> Unit,
-    onNext: () -> Unit,
-    onSeek: (Long) -> Unit
+    onNext: () -> Unit
 ) {
-    var draggingValue by remember { mutableStateOf<Float?>(null) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, top = 13.dp, bottom = 4.dp),
+            .padding(start = 12.dp, end = 12.dp, top = 13.dp, bottom = 13.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AlbumCover(
@@ -324,50 +336,6 @@ private fun MiniPlayerContent(
             icon = Icons.Filled.SkipNext,
             description = Strings.get("next"),
             tint = MaterialTheme.colorScheme.onSurface
-        )
-    }
-
-    val progress = draggingValue ?: if (durationMs > 0) {
-        (positionMs.toFloat() / durationMs).coerceIn(0f, 1f)
-    } else 0f
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 22.dp)
-            .height(14.dp)
-            .pointerInput(durationMs) {
-                if (durationMs <= 0) return@pointerInput
-
-                detectTapGestures { offset ->
-                    val ratio = (offset.x / size.width).coerceIn(0f, 1f)
-                    onSeek((ratio * durationMs).toLong())
-                }
-            }
-            .pointerInput(durationMs) {
-                if (durationMs <= 0) return@pointerInput
-
-                detectHorizontalDragGestures(
-                    onDragEnd = {
-                        draggingValue?.let { v ->
-                            onSeek((v * durationMs).toLong())
-                        }
-                        draggingValue = null
-                    },
-                    onDragCancel = {
-                        draggingValue = null
-                    }
-                ) { change, _ ->
-                    val ratio = (change.position.x / size.width).coerceIn(0f, 1f)
-                    draggingValue = ratio
-                }
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        LinearProgressIndicator(
-            progress = { progress },
-            modifier = Modifier.fillMaxWidth().height(2.dp),
-            color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
         )
     }
 }

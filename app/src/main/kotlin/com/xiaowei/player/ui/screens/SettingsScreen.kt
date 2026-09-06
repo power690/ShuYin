@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
@@ -82,6 +83,7 @@ import androidx.core.content.ContextCompat
 import com.xiaowei.player.BuildConfig
 import com.xiaowei.player.data.AudioMixPrefs
 import com.xiaowei.player.data.CustomPathPrefs
+import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
@@ -179,11 +181,13 @@ private fun ExpressiveSettingItem(
             }
             .then(
                 if (onClick != null && itemEnabled) {
-                    Modifier.clickable(
-                        interactionSource = interactionSource,
-                        indication = ripple(),
-                        onClick = onClick
-                    )
+                    Modifier
+                        .clip(RoundedCornerShape(24.dp))
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = ripple(),
+                            onClick = onClick
+                        )
                 } else {
                     Modifier
                 }
@@ -306,6 +310,7 @@ fun SettingsScreen(
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
     val localePrefs = remember { LocalePrefs.get(context) }
+    val darkModePrefs = remember { DarkModePrefs.get(context) }
     val customPathPrefs = remember { CustomPathPrefs.get(context) }
     val audioMixPrefs = remember { AudioMixPrefs.get(context) }
 
@@ -315,6 +320,8 @@ fun SettingsScreen(
     val currentLangCode = localePrefs.languageCodeState.value
 
     var showLanguagePicker by remember { mutableStateOf(false) }
+
+    var showDarkModePicker by remember { mutableStateOf(false) }
 
     var showCustomPathDialog by remember { mutableStateOf(false) }
 
@@ -442,6 +449,13 @@ fun SettingsScreen(
             SettingsCategoryHeader(
                 text = Strings.get("settings_category_theme"),
                 modifier = Modifier.padding(top = 8.dp)
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.DarkMode,
+                tone = SettingIconTone.PRIMARY,
+                title = Strings.get("settings_dark_theme"),
+                onClick = { showDarkModePicker = true }
             )
 
             ThemeColorPickerItem(
@@ -625,6 +639,17 @@ fun SettingsScreen(
                 showLanguagePicker = false
             },
             onDismiss = { showLanguagePicker = false }
+        )
+    }
+
+    if (showDarkModePicker) {
+        DarkModePickerSheet(
+            currentMode = darkModePrefs.darkModeState.value,
+            onConfirm = { selectedMode ->
+                darkModePrefs.darkMode = selectedMode
+                showDarkModePicker = false
+            },
+            onDismiss = { showDarkModePicker = false }
         )
     }
 

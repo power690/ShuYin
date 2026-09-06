@@ -62,6 +62,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
@@ -77,9 +78,14 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.xiaowei.player.ShuYinApp
 import com.xiaowei.player.ui.theme.DEFAULT_THEME_COLOR_INDEX
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 import com.xiaowei.player.ui.theme.rememberZMusicColorScheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 class DesktopLyricService : Service() {
 
@@ -205,6 +211,11 @@ class DesktopLyricService : Service() {
     private var lastTapTime = 0L
     private val DOUBLE_TAP_THRESHOLD = 300
 
+    private var playerStateJob: Job? = null
+    private val playerStateScope = CoroutineScope(Dispatchers.Main + Job())
+    private var ownCachedLyrics: List<FloatingLyricLine> = emptyList()
+    private var ownCachedSongId = -1L
+
     private var settingsComposeView: ComposeView? = null
     private var settingsMenuParams: WindowManager.LayoutParams? = null
     private var settingsLifecycleOwner: ServiceLifecycleOwner? = null
@@ -230,6 +241,37 @@ class DesktopLyricService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "onCreate: Error creating service", e)
+        }
+        startPlayerStateCollection()
+    }
+
+    private fun startPlayerStateCollection() {
+        playerStateJob?.cancel()
+        val app = applicationContext as? ShuYinApp ?: return
+        playerStateJob = playerStateScope.launch {
+            app.playerManager.state.collect { st ->
+                val song = st.currentSong
+                if (song == null) {
+                    updateLyric(emptyList(), -1, st.positionMs, st.positionUpdateNanos, st.isPlaying)
+                    return@collect
+                }
+                if (song.id != ownCachedSongId) {
+                    ownCachedSongId = song.id
+                    val parsed = LyricsParser.parse(song.lyrics)
+                    ownCachedLyrics = parsed.map { line ->
+                        FloatingLyricLine(
+                            line.timeMs,
+                            line.text,
+                            line.words.map { word -> FloatingLyricWord(word.timeMs, word.text) }
+                        )
+                    }
+                }
+                val idx = LyricsParser.findCurrentLine(
+                    ownCachedLyrics.map { com.xiaowei.player.data.LyricLine(it.timeMs, it.text) },
+                    st.positionMs
+                )
+                updateLyric(ownCachedLyrics, idx, st.positionMs, st.positionUpdateNanos, st.isPlaying)
+            }
         }
     }
 
@@ -564,6 +606,7 @@ class DesktopLyricService : Service() {
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .clip(CircleShape)
                                 .clickable { onCloseLyric() },
                             contentAlignment = Alignment.Center
                         ) {
@@ -596,6 +639,7 @@ class DesktopLyricService : Service() {
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .clip(CircleShape)
                                     .clickable {
                                         if (index == 0) {
                                             textColor = DesktopLyricSettings.THEME_COLOR
@@ -788,6 +832,8 @@ class DesktopLyricService : Service() {
 
     override fun onDestroy() {
         instance = null
+        playerStateJob?.cancel()
+        playerStateJob = null
         themeColorCallback?.let {
             com.xiaowei.player.data.ThemePrefs.get(this).removeColorChangedListener(it)
         }

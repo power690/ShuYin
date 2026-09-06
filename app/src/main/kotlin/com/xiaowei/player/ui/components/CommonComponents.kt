@@ -159,6 +159,7 @@ fun PlayAllButton(
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(RoundedCornerShape(20.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
@@ -248,6 +249,7 @@ fun SortButton(
                     scaleX = scale
                     scaleY = scale
                 }
+                .clip(RoundedCornerShape(20.dp))
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(),

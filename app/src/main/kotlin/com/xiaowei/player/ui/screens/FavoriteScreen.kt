@@ -306,6 +306,7 @@ private fun FavoriteSongRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
             .background(
                 if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
                 else Color.Transparent

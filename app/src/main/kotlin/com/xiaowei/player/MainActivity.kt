@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LyricsParser
 import com.xiaowei.player.data.UpdateChecker
 import com.xiaowei.player.player.DesktopLyricService
@@ -46,6 +47,8 @@ class MainActivity : ComponentActivity() {
     private var floatingLyricEnabled by mutableStateOf(false)
 
     private var isSystemDarkTheme by mutableStateOf(false)
+
+    private val darkModePrefs by lazy { DarkModePrefs.get(this) }
 
     private var cachedLyrics: List<DesktopLyricService.FloatingLyricLine> = emptyList()
     private var cachedLyricSongId: Long = -1L
@@ -152,7 +155,11 @@ class MainActivity : ComponentActivity() {
         checkPermissionAndLoad()
 
         setContent {
-            ZMusicTheme(darkTheme = isSystemDarkTheme) {
+            val effectiveDark = darkModePrefs.isDarkTheme(isSystemDarkTheme)
+            LaunchedEffect(effectiveDark) {
+                reassertSystemBarAppearance()
+            }
+            ZMusicTheme(darkTheme = effectiveDark) {
                 val state by viewModel.library.collectAsState()
                 val playerState by viewModel.playerManager.state.collectAsState()
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -448,7 +455,7 @@ class MainActivity : ComponentActivity() {
         try {
             val forceLightIcons =
                 com.xiaowei.player.ui.theme.StatusBarStyle.forceLightIcons.value
-            val lightBars = !forceLightIcons && !isSystemDarkTheme
+            val lightBars = !forceLightIcons && !darkModePrefs.isDarkTheme(isSystemDarkTheme)
             val controller = androidx.core.view.WindowCompat.getInsetsController(
                 window, window.decorView
             )

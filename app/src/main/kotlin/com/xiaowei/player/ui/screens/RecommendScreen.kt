@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -148,6 +149,7 @@ fun RecommendScreen(
                             scaleX = searchScale
                             scaleY = searchScale
                         }
+                        .clip(RoundedCornerShape(28.dp))
                         .clickable(
                             interactionSource = searchInteraction,
                             indication = ripple(),
@@ -279,9 +281,9 @@ fun RecommendScreen(
 @Composable
 private fun RecommendCardItem(
     card: RecommendCard,
-    onClick: () -> Unit,
     fillWidth: Boolean = false,
-    cardHeight: Int = 140
+    cardHeight: Int = 140,
+    onClick: (() -> Unit)? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
@@ -299,10 +301,16 @@ private fun RecommendCardItem(
                 scaleX = scale
                 scaleY = scale
             }
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(),
-                onClick = onClick
+            .then(
+                if (onClick != null) {
+                    Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable(
+                            interactionSource = interactionSource,
+                            indication = ripple(),
+                            onClick = onClick
+                        )
+                } else Modifier
             ),
         shape = RoundedCornerShape(20.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
@@ -364,6 +372,7 @@ fun AlbumTile(album: Album, onClick: () -> Unit) {
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
@@ -414,6 +423,7 @@ fun ArtistTile(artist: Artist, onClick: () -> Unit) {
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
@@ -500,7 +510,6 @@ fun RecommendDetailScreen(
                 ) {
                     RecommendCardItem(
                         card = card,
-                        onClick = { onPlayAll(sortedSongs) },
                         fillWidth = true,
                         cardHeight = 220
                     )
@@ -730,6 +739,7 @@ fun SearchScreen(
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier
                                     .size(22.dp)
+                                    .clip(CircleShape)
                                     .clickable(onClick = { clearHistory() })
                                     .padding(4.dp)
                             )
@@ -857,6 +867,7 @@ private fun SearchChip(text: String, onClick: () -> Unit) {
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(RoundedCornerShape(16.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),

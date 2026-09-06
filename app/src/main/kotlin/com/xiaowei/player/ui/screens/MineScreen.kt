@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
@@ -121,6 +122,7 @@ private fun MineActionItem(
                 scaleX = scale
                 scaleY = scale
             }
+            .clip(RoundedCornerShape(24.dp))
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
@@ -206,6 +208,7 @@ fun MineScreen(
                     scaleX = cardScale
                     scaleY = cardScale
                 }
+                .clip(RoundedCornerShape(24.dp))
                 .clickable(
                     interactionSource = cardInteraction,
                     indication = ripple(),

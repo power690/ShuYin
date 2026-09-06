@@ -455,12 +455,9 @@ fun ShuYinApp(
                                 MiniPlayerBar(
                                     song = currentSong,
                                     isPlaying = playerState.isPlaying,
-                                    positionMs = playerState.positionMs,
-                                    durationMs = playerState.durationMs,
                                     onPlayPause = onTogglePlayPause,
                                     onPrev = onSkipPrev,
                                     onNext = onSkipNext,
-                                    onSeek = onSeek,
                                     onClick = { playerExpanded = true },
                                     glassBackdrop = contentBackdrop,
                                     forceFrosted = materialFrosted
@@ -497,19 +494,30 @@ fun ShuYinApp(
                                 .fillMaxSize()
                                 .graphicsLayer {
                                     val enter = enterProgress.value
+                                    val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
 
-                                    translationX = (1f - enter) * size.width
+                                    val enterScale = ENTER_SCALE_MIN + (1f - ENTER_SCALE_MIN) * enter
+                                    val compressScale = COMPRESS_SCALE_MIN +
+                                        (1f - COMPRESS_SCALE_MIN) * (1f - playerP)
+                                    scaleX = enterScale * compressScale
+                                    scaleY = enterScale * compressScale
 
-                                    val scale = ENTER_SCALE_MIN + (1f - ENTER_SCALE_MIN) * enter
-                                    scaleX = scale
-                                    scaleY = scale
+                                    translationX = (1f - enter) * size.width -
+                                        playerP * size.width * COMPRESS_TRANSLATE_FRACTION
 
                                     val radiusDp = ENTER_RADIUS_DP -
-                                        enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP
+                                        enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP +
+                                        playerP * ENTER_RADIUS_DP
                                     shape = RoundedCornerShape(radiusDp.dp)
                                     clip = true
 
                                     shadowElevation = ENTER_SHADOW_MAX * (1f - enter)
+
+                                    if (supportsBlur && playerP > 0f &&
+                                        playerEnterProgress.isRunning) {
+                                        val blurSigma = playerP * density * BLUR_MAX_DP
+                                        renderEffect = BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
+                                    }
                                 }
                                 .clickable(
                                     interactionSource = remember { MutableInteractionSource() },

@@ -1,7 +1,6 @@
 package com.xiaowei.player.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -51,15 +50,13 @@ import com.xiaowei.player.i18n.Strings
 private fun DetailHeaderCard(
     title: String,
     subtitle: String,
-    onClick: () -> Unit,
     filePath: String? = null
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp)
-            .height(220.dp)
-            .clickable(onClick = onClick),
+            .height(220.dp),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
     ) {
@@ -161,7 +158,6 @@ fun ArtistDetailScreen(
                 DetailHeaderCard(
                     title = artistName,
                     subtitle = Strings.get("song_count", artist?.songCount ?: songs.size),
-                    onClick = { onPlayAll(sortedSongs) },
                     filePath = artist?.firstSongData ?: songs.firstOrNull()?.data
                 )
             }
@@ -261,7 +257,6 @@ fun AlbumDetailScreen(
                 DetailHeaderCard(
                     title = album?.displayName ?: Strings.get("unknown_album"),
                     subtitle = album?.displayAlbumDashArtist ?: Strings.get("unknown_artist"),
-                    onClick = { onPlayAll(sortedSongs) },
                     filePath = album?.firstSongData ?: songs.firstOrNull()?.data
                 )
             }
