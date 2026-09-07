@@ -1,6 +1,6 @@
-name: "💡 功能建议 / 🐛 问题反馈 | 기능 제안 / 버그 보고 | Feature Request / Bug Report"
-description: "提交功能建议或问题反馈，建议可通过 👍 投票 | 기능 제안 또는 버그 보고 | Propose a feature or report a bug"
-title: "[建议/问题 | 제안/버그 | Feature/Bug] "
+name: "💡 功能建议 / 🐛 问题反馈"
+description: "提交功能建议或问题反馈，建议可通过 👍 投票"
+title: "[建议/问题] "
 body:
   - type: markdown
     attributes:
@@ -11,88 +11,68 @@ body:
         请勿回复 "+1" 类评论，直接点 👍 即可
         每个版本开发前，得票最高的建议将优先纳入开发计划
         提交前请先搜索已有 Issue，避免重复
-
-        ## 🗳️ 투표 규칙 (기능 제안)
-
-        이 제안을 지지하려면 이 이슈에 👍 반응을 남겨 주세요. 1인 1표입니다
-        "+1" 같은 댓글은 자제해 주세요. 👍 반응이 곧 표입니다
-        매 버전 개발 전, 가장 많은 표를 받은 제안을 우선적으로 개발합니다
-        제출하기 전에 기존 이슈를 먼저 검색해 주세요
-
-        ## 🗳️ Voting Rules (Feature Requests)
-
-        To support a suggestion, add a 👍 reaction to this issue — one vote per person
-        Please avoid "+1" comments — the 👍 reaction is the vote
-        Before each release, top-voted suggestions will be prioritized
-        Please search existing issues before submitting to avoid duplicates
   - type: dropdown
     id: type
     attributes:
-      label: 类型 | 유형 | Type
+      label: 类型
       options:
-        - "💡 功能建议 | 기능 제안 | Feature Request"
-        - "🐛 问题反馈 | 버그 보고 | Bug Report"
+        - "💡 功能建议"
+        - "🐛 问题反馈"
     validations:
       required: true
   - type: checkboxes
     id: checklist
     attributes:
-      label: 提交前确认 | 제출 전 확인 | Pre-submit Checklist
+      label: 提交前确认
       options:
-        - label: 我已搜索过现有 Issue，确认没有重复 | 기존 이슈를 검색했으며 중복이 아님을 확인했습니다 | I have searched existing issues and confirmed this is not a duplicate
+        - label: 我已搜索过现有 Issue，确认没有重复
           required: true
   - type: dropdown
     id: area
     attributes:
-      label: 涉及方面 | 관련 영역 | Area
+      label: 涉及方面
       options:
-        - "🎵 播放功能 | 재생 기능 | Playback"
-        - "🎨 界面与主题 | UI 및 테마 | UI & Theme"
-        - "📝 歌词 | 가사 | Lyrics"
-        - "📂 扫描与文件管理 | 스캔 및 파일 관리 | Scanning & Files"
-        - "🌍 语言与翻译 | 언어 및 번역 | Language & Translation"
-        - "⚙️ 设置与其他 | 설정 및 기타 | Settings & Others"
+        - "🎵 播放功能"
+        - "🎨 界面与主题"
+        - "📝 歌词"
+        - "📂 扫描与文件管理"
+        - "🌍 语言与翻译"
+        - "⚙️ 设置与其他"
     validations:
       required: true
   - type: textarea
     id: description
     attributes:
-      label: 描述 | 설명 | Description
+      label: 描述
       description: |
         功能建议：清晰描述你想要的功能，它应该怎么工作
         问题反馈：发生了什么？原本期望发生什么？
-        버그 발생 시: 무슨 일이 있었나요? 예상했던 결과는 무엇이었나요?
-        Bug: What happened, and what did you expect instead?
       placeholder: |
         例：希望收藏支持自定义分组，可以按场景建歌单
-        예: 플레이리스트에 사용자 정의 그룹을 지원했으면 합니다
-        e.g. I'd like favorites to support custom groups...
+        例：播放 FLAC 歌曲约 30 秒后声音突然停止
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
-      label: 复现步骤（问题反馈必填） | 재현 방법 (버그 보고 시 필수) | Steps to Reproduce (required for bugs)
+      label: 复现步骤（问题反馈必填）
       description: |
         按步骤描述如何复现这个问题（功能建议可留空）
-        문제를 재현하는 단계를 순서대로 적어 주세요 (기능 제안은 비워 두셔도 됩니다)
-        List the steps to reproduce the behavior (leave empty for feature requests)
       placeholder: |
-        1. 打开 App 2. 进入……
-        1. 앱 열기 2. ……
-        1. Open the app 2. Go to...
+        1. 打开 App
+        2. 进入……
   - type: input
     id: version
     attributes:
-      label: 软件版本 | 앱 버전 | App Version
-      description: 设置 → 关于 页面可查看版本号 | 설정 → 정보에서 확인할 수 있습니다 | Found in Settings → About
+      label: 软件版本
+      description: 设置 → 关于 页面可查看版本号
       placeholder: "1.9.1"
     validations:
       required: true
   - type: dropdown
     id: android
     attributes:
-      label: Android 版本 | Android 버전 | Android Version
+      label: Android 版本
       options:
         - "Android 15+"
         - "Android 14"
@@ -100,19 +80,17 @@ body:
         - "Android 12"
         - "Android 11"
         - "Android 10"
-        - "Android 9 及以下 | Android 9 이하 | Android 9 or below"
+        - "Android 9 及以下"
     validations:
       required: true
   - type: input
     id: device
     attributes:
-      label: 设备型号 | 기기 모델 | Device Model
-      placeholder: "例：小米 14 | 예: 샤오미 14 | e.g. Xiaomi 14"
+      label: 设备型号
+      placeholder: "例：小米 14"
   - type: textarea
     id: context
     attributes:
-      label: 补充信息 | 추가 정보 | Additional Context
+      label: 补充信息
       description: |
         截图、参考的其他 App、错误日志或任何补充说明
-        스크린샷, 참고한 앱, 오류 로그 또는 기타 추가 설명
-        Screenshots, reference apps, error logs, or anything else
