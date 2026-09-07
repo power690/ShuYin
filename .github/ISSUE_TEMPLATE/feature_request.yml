@@ -1,7 +1,7 @@
 name: "💡 功能建议 | Feature Request"
 description: "为鼠音 ShuYin 提出新功能或改进建议，得票最高的建议将优先开发 | Propose a feature or improvement — top-voted suggestions get development priority"
 title: "[功能建议 | Feature] "
-labels: ["feature-request"]
+labels: ["enhancement"]
 body:
   - type: markdown
     attributes:
