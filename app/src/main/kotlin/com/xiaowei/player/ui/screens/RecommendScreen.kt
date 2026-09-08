@@ -100,7 +100,6 @@ fun RecommendScreen(
     onOpenPlayer: () -> Unit,
     onRefresh: () -> Unit,
     onOpenRecommendCard: (RecommendCard) -> Unit,
-    onOpenSearch: () -> Unit,
     listState: LazyListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState(0, 0) },
 
     bottomPadding: Dp = 168.dp
@@ -132,53 +131,6 @@ fun RecommendScreen(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(bottom = bottomPadding)
         ) {
-
-            item {
-                val searchInteraction = remember { MutableInteractionSource() }
-                val searchPressed by searchInteraction.collectIsPressedAsState()
-                val searchScale by animateFloatAsState(
-                    targetValue = if (searchPressed) 0.97f else 1f,
-                    animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
-                    label = "homeSearchScale"
-                )
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp)
-                        .graphicsLayer {
-                            scaleX = searchScale
-                            scaleY = searchScale
-                        }
-                        .clip(RoundedCornerShape(28.dp))
-                        .clickable(
-                            interactionSource = searchInteraction,
-                            indication = ripple(),
-                            onClick = onOpenSearch
-                        ),
-                    shape = RoundedCornerShape(28.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Search,
-                            contentDescription = Strings.get("search"),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = Strings.get("search_hint"),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
 
             item {
                 Text(
@@ -217,7 +169,7 @@ fun RecommendScreen(
                             card = card,
                             onClick = { onOpenRecommendCard(card) },
                             fillWidth = true,
-                            cardHeight = 170
+                            cardHeight = 200
                         )
                     }
                 }
@@ -581,7 +533,10 @@ fun SearchScreen(
     onPlaySong: (Song, List<Song>) -> Unit,
     onPlayAll: (List<Song>) -> Unit,
     onBack: () -> Unit,
-    onOpenPlayer: () -> Unit
+    onOpenPlayer: () -> Unit,
+    isActive: Boolean = true,
+
+    bottomPadding: Dp = 100.dp
 ) {
     var query by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
@@ -632,8 +587,11 @@ fun SearchScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
+    LaunchedEffect(isActive) {
+        if (!isActive) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        }
     }
 
     val results = remember(query, library.songs) {
@@ -714,7 +672,7 @@ fun SearchScreen(
         if (q.isEmpty()) {
 
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(bottom = bottomPadding)
             ) {
 
                 if (history.isNotEmpty()) {
@@ -812,7 +770,7 @@ fun SearchScreen(
                 if (q.isNotEmpty()) addToHistory(q)
             }
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 100.dp)
+                contentPadding = PaddingValues(bottom = bottomPadding)
             ) {
                 item {
                     Text(

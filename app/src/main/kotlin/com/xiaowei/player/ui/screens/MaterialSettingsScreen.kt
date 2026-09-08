@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +53,7 @@ private data class MaterialTab(val labelKey: String, val icon: ImageVector)
 private val materialTabs = listOf(
     MaterialTab("tab_recommend", Icons.Filled.Home),
     MaterialTab("tab_library", Icons.Filled.LibraryMusic),
+    MaterialTab("tab_search", Icons.Filled.Search),
     MaterialTab("tab_mine", Icons.Filled.Person)
 )
 

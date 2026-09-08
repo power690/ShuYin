@@ -17,8 +17,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 18
-        versionName = "1.9.1"
+        versionCode = 19
+        versionName = "1.9.3"
         vectorDrawables { useSupportLibrary = true }
 
         externalNativeBuild {
@@ -30,7 +30,7 @@ android {
 
         ndk {
             abiFilters += if (releaseBuild) {
-                listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+                listOf("arm64-v8a", "armeabi-v7a")
             } else {
                 listOf("arm64-v8a")
             }

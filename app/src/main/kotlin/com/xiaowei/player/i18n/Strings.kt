@@ -6869,5 +6869,47 @@ object Strings {
         ),
     )
 
-    private val ALL_STRINGS: Map<String, Map<String, String>> = buildStringsPart1() + buildStringsPart2() + buildStringsPart3() + buildStringsPart4() + buildStringsPart5() + buildStringsPart6()
+    private fun buildStringsPart7(): Map<String, Map<String, String>> = mapOf(
+        "tab_search" to mapOf(
+            "zh" to "搜索",
+            "zh-TW" to "搜尋",
+            "zh-HK" to "搜尋",
+            "zh-MO" to "搜尋",
+            "en" to "Search",
+            "ja" to "検索",
+            "ko" to "검색",
+            "fr" to "Rechercher",
+            "de" to "Suchen",
+            "es" to "Buscar",
+            "ru" to "Поиск",
+            "pt" to "Pesquisar",
+            "it" to "Cerca",
+            "ar" to "بحث",
+            "hi" to "खोजें",
+            "th" to "ค้นหา",
+            "vi" to "Tìm",
+            "in" to "Cari",
+            "tr" to "Ara",
+            "ug" to "ئىزدەش",
+            "mn" to "Хайх",
+            "fa" to "جستجو",
+            "ur" to "تلاش",
+            "bn" to "খুঁজুন",
+            "pl" to "Szukaj",
+            "uk" to "Пошук",
+            "nl" to "Zoeken",
+            "sv" to "Sök",
+            "cs" to "Hledat",
+            "hu" to "Keresés",
+            "el" to "Αναζήτηση",
+            "ro" to "Caută",
+            "fi" to "Hae",
+            "da" to "Søg",
+            "nb" to "Søk",
+            "ms" to "Cari",
+            "tl" to "Hanapin",
+        ),
+    )
+
+    private val ALL_STRINGS: Map<String, Map<String, String>> = buildStringsPart1() + buildStringsPart2() + buildStringsPart3() + buildStringsPart4() + buildStringsPart5() + buildStringsPart6() + buildStringsPart7()
 }

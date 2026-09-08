@@ -13,7 +13,6 @@ object FlacLyricsParser {
     fun readLyrics(filePath: String): String? {
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return null
-        if (!isFlacFile(file)) return null
 
         return try {
             RandomAccessFile(file, "r").use { raf ->
@@ -47,20 +46,6 @@ object FlacLyricsParser {
             }
         } catch (e: Exception) {
             null
-        }
-    }
-
-    private fun isFlacFile(file: File): Boolean {
-        if (file.length() < 4) return false
-        return try {
-            RandomAccessFile(file, "r").use { raf ->
-                raf.readByte().toInt() == 0x66 && 
-                raf.readByte().toInt() == 0x4C && 
-                raf.readByte().toInt() == 0x61 && 
-                raf.readByte().toInt() == 0x43    
-            }
-        } catch (e: Exception) {
-            false
         }
     }
 

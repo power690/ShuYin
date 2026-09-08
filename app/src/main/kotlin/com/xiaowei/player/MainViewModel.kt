@@ -88,7 +88,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             _library.value = _library.value.copy(isLoading = true)
 
             val customPath = CustomPathPrefs.get(getApplication()).path.trim()
-            val songs = withTimeoutOrNull(30_000L) {
+            val songs = withTimeoutOrNull(600_000L) {
                 if (customPath.isNotBlank()) {
                     repo.loadMusicFromPath(customPath)
                 } else {

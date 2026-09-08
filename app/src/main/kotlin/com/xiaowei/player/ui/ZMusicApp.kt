@@ -24,6 +24,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -80,6 +81,7 @@ import kotlin.math.pow
 private enum class Tab(val labelKey: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Recommend("tab_recommend", Icons.Filled.Home),
     Library("tab_library", Icons.Filled.LibraryMusic),
+    Search("tab_search", Icons.Filled.Search),
     Mine("tab_mine", Icons.Filled.Person)
 }
 
@@ -412,7 +414,6 @@ fun ShuYinApp(
                                             onOpenPlayer = { playerExpanded = true },
                                             onRefresh = onRefresh,
                                             onOpenRecommendCard = { card -> requestDetail(Detail.RecommendDetail(card)) },
-                                            onOpenSearch = { requestDetail(Detail.Search) },
                                             listState = recommendListState,
                                             bottomPadding = bottomReserved
                                         )
@@ -431,6 +432,20 @@ fun ShuYinApp(
                                             onOpenPlayer = { playerExpanded = true },
                                             initialPage = libraryPage,
                                             onPageChanged = { libraryPage = it },
+                                            bottomPadding = bottomReserved
+                                        )
+                                    }
+                                    Tab.Search -> {
+                                        if (library.isLoading) LoadingScreen()
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        else SearchScreen(
+                                            library = library,
+                                            playerState = playerState,
+                                            onPlaySong = onPlaySong,
+                                            onPlayAll = onPlayAll,
+                                            onBack = {},
+                                            onOpenPlayer = { playerExpanded = true },
+                                            isActive = mainPagerState.currentPage == page,
                                             bottomPadding = bottomReserved
                                         )
                                     }

@@ -7,14 +7,49 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import com.mpatric.mp3agic.Mp3File
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.io.BufferedInputStream
+import java.io.BufferedOutputStream
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.DataInputStream
+import java.io.DataOutputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.security.MessageDigest
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 
 class MusicRepository(private val context: Context) {
 
+    private class FileStat(val size: Long, val mtime: Long)
+
+    private class ScanTree(
+        val files: List<File>,
+        val fileStats: Map<String, FileStat>,
+        val dirSigs: Map<String, Long>
+    )
+
+    private class ScanCacheEntry(
+        val path: String,
+        val sizeBytes: Long,
+        val lastModifiedMs: Long,
+        val dirSig: Long,
+        val song: Song
+    )
+
     suspend fun loadAllMusic(): List<Song> = withContext(Dispatchers.IO) {
+        lrcDirCache.clear()
         val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
@@ -39,7 +74,6 @@ class MusicRepository(private val context: Context) {
 
         val songs = mutableListOf<Song>()
 
-        val mmr = MediaMetadataRetriever()
         try {
             context.contentResolver.query(
                 collection, projection, selection, null, sortOrder
@@ -71,7 +105,7 @@ class MusicRepository(private val context: Context) {
                         val mime = cursor.getString(mimeCol)
                         val displayName = cursor.getString(displayCol) ?: title
 
-                        val lyrics = readLyrics(data, mime, mmr)
+                        val lyrics = readLyrics(data, mime)
 
                         songs.add(
                             Song(
@@ -97,8 +131,6 @@ class MusicRepository(private val context: Context) {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to query MediaStore", e)
-        } finally {
-            try { mmr.release() } catch (_: Exception) {}
         }
 
         Log.i(TAG, "Loaded ${songs.size} songs from MediaStore")
@@ -114,90 +146,173 @@ class MusicRepository(private val context: Context) {
 
         val supportedExtensions = setOf("mp3", "flac", "ogg", "m4a", "aac", "wav", "opus")
         val songs = mutableListOf<Song>()
-        val mmr = MediaMetadataRetriever()
+
+        lrcDirCache.clear()
 
         try {
 
-            val audioFiles = mutableListOf<File>()
-            collectAudioFiles(rootFile, supportedExtensions, audioFiles)
+            val cache = loadScanCache()
+            val scanTree = collectAudioFiles(rootFile, supportedExtensions)
 
-            audioFiles.sortByDescending { it.lastModified() }
-
-            coroutineScope {
-                audioFiles.forEach { file ->
-                    val filePath = file.absolutePath
-                    try {
-                        mmr.setDataSource(filePath)
-                        val title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
-                            ?: file.nameWithoutExtension
-                        val artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
-                        val album = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
-                        val albumArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
-                        val durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
-                        val duration = durationStr?.toLongOrNull() ?: 0L
-                        val yearStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-                        val year = yearStr?.toIntOrNull() ?: 0
-                        val mimeTypeStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
-                        val trackStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-                        val track = trackStr?.split("/")?.firstOrNull()?.toIntOrNull() ?: 0
-
-                        val id = filePath.hashCode().toLong() and 0xFFFFFFFFL
-                        val albumId = "$artist|$album".hashCode().toLong() and 0xFFFFFFFFL
-                        val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
-
-                        val lyrics = readLyrics(filePath, mimeTypeStr, MediaMetadataRetriever())
-
-                        songs.add(
-                            Song(
-                                id = id,
-                                title = title,
-                                artist = artist,
-                                artistId = artistId,
-                                album = album,
-                                albumId = albumId,
-                                albumArtist = albumArtist,
-                                duration = duration,
-                                data = filePath,
-                                dateAdded = file.lastModified() / 1000,
-                                track = track,
-                                year = year,
-                                lyrics = lyrics,
-                                mimeType = mimeTypeStr,
-                                size = file.length(),
-                                source = "custom_path"  
-                            )
-                        )
-                    } catch (e: Exception) {
-                        Log.w(TAG, "Failed to read metadata: $filePath - ${e.message}")
-                    }
-                }
+            val audioFiles = scanTree.files.sortedByDescending { file ->
+                scanTree.fileStats[file.absolutePath]?.mtime ?: 0L
             }
+
+            val hitCount = AtomicInteger(0)
+            val semaphore = Semaphore(SCAN_PARALLELISM)
+            coroutineScope {
+                val loaded = audioFiles.map { file ->
+                    async {
+                        semaphore.withPermit {
+                            resolveSong(file, scanTree, cache, hitCount)
+                        }
+                    }
+                }.awaitAll()
+                songs.addAll(loaded.filterNotNull())
+            }
+
+            if (hitCount.get() != songs.size || cache.size != songs.size) {
+                saveScanCache(songs, scanTree)
+            }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "Failed to scan custom path: $rootPath", e)
-        } finally {
-            try { mmr.release() } catch (_: Exception) {}
         }
 
         Log.i(TAG, "Loaded ${songs.size} songs from custom path: $rootPath")
         songs
     }
 
-    private fun collectAudioFiles(
+    private fun readSongFromFile(file: File): Song? {
+        val filePath = file.absolutePath
+        val mmr = MediaMetadataRetriever()
+        try {
+            mmr.setDataSource(filePath)
+            val title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                ?: file.nameWithoutExtension
+            val artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
+            val album = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
+            val albumArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+            val durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+            val duration = durationStr?.toLongOrNull() ?: 0L
+            val yearStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
+            val year = yearStr?.toIntOrNull() ?: 0
+            val mimeTypeStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+            val trackStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+            val track = trackStr?.split("/")?.firstOrNull()?.toIntOrNull() ?: 0
+
+            val id = filePath.hashCode().toLong() and 0xFFFFFFFFL
+            val albumId = "$artist|$album".hashCode().toLong() and 0xFFFFFFFFL
+            val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
+
+            val lyrics = readLyrics(filePath, mimeTypeStr)
+
+            return Song(
+                id = id,
+                title = title,
+                artist = artist,
+                artistId = artistId,
+                album = album,
+                albumId = albumId,
+                albumArtist = albumArtist,
+                duration = duration,
+                data = filePath,
+                dateAdded = file.lastModified() / 1000,
+                track = track,
+                year = year,
+                lyrics = lyrics,
+                mimeType = mimeTypeStr,
+                size = file.length(),
+                source = "custom_path"
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read metadata: $filePath - ${e.message}")
+            return null
+        } finally {
+            try { mmr.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun resolveSong(
+        file: File,
+        tree: ScanTree,
+        cache: Map<String, ScanCacheEntry>,
+        hitCount: AtomicInteger
+    ): Song? {
+        val path = file.absolutePath
+        val cached = cache[path]
+        if (cached != null) {
+            val stat = tree.fileStats[path]
+            val sig = tree.dirSigs[file.parentFile?.absolutePath]
+            if (stat != null &&
+                cached.sizeBytes == stat.size &&
+                cached.lastModifiedMs == stat.mtime &&
+                cached.dirSig == sig
+            ) {
+                hitCount.incrementAndGet()
+                return cached.song
+            }
+        }
+        return readSongFromFile(file)
+    }
+
+    private suspend fun collectAudioFiles(
         dir: File,
-        extensions: Set<String>,
-        result: MutableList<File>
-    ) {
-        val children = dir.listFiles() ?: return
+        extensions: Set<String>
+    ): ScanTree {
+        val children = dir.listFiles()
+            ?: return ScanTree(emptyList(), emptyMap(), emptyMap())
+        val files = mutableListOf<File>()
+        val stats = HashMap<String, FileStat>()
+        val subDirs = mutableListOf<File>()
+        val nonAudio = mutableListOf<Pair<String, Long>>()
         for (child in children) {
             if (child.isDirectory) {
-                collectAudioFiles(child, extensions, result)
+                subDirs.add(child)
             } else if (child.isFile) {
                 val ext = child.extension.lowercase()
                 if (ext in extensions) {
-                    result.add(child)
+                    files.add(child)
+                    stats[child.absolutePath] = FileStat(child.length(), child.lastModified())
+                } else {
+                    nonAudio.add(child.name to child.lastModified())
                 }
             }
         }
+        val dirSigs = HashMap<String, Long>()
+        dirSigs[dir.absolutePath] = dirSignature(nonAudio)
+        if (subDirs.isEmpty()) {
+            return ScanTree(files, stats, dirSigs)
+        }
+        val fromSubDirs = coroutineScope {
+            subDirs.map { sub ->
+                async { collectAudioFiles(sub, extensions) }
+            }.awaitAll()
+        }
+        val mergedFiles = files.toMutableList()
+        val mergedStats = HashMap(stats)
+        for (r in fromSubDirs) {
+            mergedFiles.addAll(r.files)
+            mergedStats.putAll(r.fileStats)
+            dirSigs.putAll(r.dirSigs)
+        }
+        return ScanTree(mergedFiles, mergedStats, dirSigs)
+    }
+
+    private fun dirSignature(entries: List<Pair<String, Long>>): Long {
+        if (entries.isEmpty()) return 0L
+        val sb = StringBuilder()
+        for ((name, mtime) in entries.sortedBy { it.first }) {
+            sb.append(name).append(':').append(mtime).append('|')
+        }
+        val digest = MessageDigest.getInstance("MD5")
+            .digest(sb.toString().toByteArray(Charsets.UTF_8))
+        var v = 0L
+        for (i in 0 until 8) {
+            v = (v shl 8) or (digest[i].toLong() and 0xFFL)
+        }
+        return v
     }
 
     private fun resolveRealFilePath(rawPath: String): String {
@@ -219,7 +334,7 @@ class MusicRepository(private val context: Context) {
         return rawPath
     }
 
-    private fun readLyrics(filePath: String, mime: String?, mmr: MediaMetadataRetriever): String? {
+    private fun readLyrics(filePath: String, mime: String?): String? {
         if (filePath.isBlank()) return null
         val lrc = readLrcFile(filePath)
         if (!lrc.isNullOrBlank()) return lrc
@@ -241,31 +356,36 @@ class MusicRepository(private val context: Context) {
     
     suspend fun reloadLyrics(song: Song): String? = withContext(Dispatchers.IO) {
         if (song.data.isBlank()) return@withContext null
-        val mmr = MediaMetadataRetriever()
         try {
-            readLyrics(song.data, song.mimeType, mmr)
+            readLyrics(song.data, song.mimeType)
         } catch (e: Exception) {
             Log.w(TAG, "reloadLyrics failed: ${song.data} - ${e.message}")
             null
-        } finally {
-            try { mmr.release() } catch (_: Exception) {}
         }
     }
+
+    private val lrcDirCache = ConcurrentHashMap<String, Set<String>>()
 
     private fun readLrcFile(songPath: String): String? {
         val songFile = File(songPath)
         val dir = songFile.parentFile ?: return null
         val base = songFile.nameWithoutExtension
+        val dirNames = lrcDirCache.getOrPut(dir.absolutePath) {
+            dir.listFiles()?.mapTo(HashSet()) { it.name } ?: emptySet()
+        }
         val candidates = listOf(
-            File(dir, "$base.lrc"),
-            File(dir, "${base}.LRC"),
-            File(dir, "$base - 歌词.lrc"),
-            File(dir, "$base.lrc.txt"),
-            File(dir, "$base.txt")
+            "$base.lrc",
+            "$base.LRC",
+            "$base - 歌词.lrc",
+            "$base.lrc.txt",
+            "$base.txt"
         )
-        for (f in candidates) {
-            if (f.exists() && f.canRead()) {
-                return f.readText(Charsets.UTF_8)
+        for (name in candidates) {
+            if (name in dirNames) {
+                val f = File(dir, name)
+                if (f.canRead()) {
+                    return f.readText(Charsets.UTF_8)
+                }
             }
         }
         return null
@@ -275,7 +395,7 @@ class MusicRepository(private val context: Context) {
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         return try {
-            val mp3 = Mp3File(filePath)
+            val mp3 = Mp3File(filePath, false)
             if (mp3.hasId3v2Tag()) {
                 val tag = mp3.id3v2Tag
                 val lyrics = tag.lyrics
@@ -286,6 +406,160 @@ class MusicRepository(private val context: Context) {
         } catch (e: NoClassDefFoundError) {
 
             null
+        }
+    }
+
+    private fun scanCacheFile(): File = File(context.filesDir, CACHE_FILE_NAME)
+
+    private fun loadScanCache(): Map<String, ScanCacheEntry> {
+        try {
+            val file = scanCacheFile()
+            if (!file.exists() || file.length() == 0L) return emptyMap()
+            DataInputStream(BufferedInputStream(FileInputStream(file), 65536)).use { dis ->
+                if (dis.readInt() != CACHE_MAGIC || dis.readInt() != CACHE_VERSION) return emptyMap()
+                val count = dis.readInt()
+                if (count < 0 || count > 1_000_000) return emptyMap()
+                val map = HashMap<String, ScanCacheEntry>(count * 2)
+                repeat(count) {
+                    val path = readString(dis) ?: return emptyMap()
+                    val sizeBytes = dis.readLong()
+                    val lastModifiedMs = dis.readLong()
+                    val dirSig = dis.readLong()
+                    val song = readSong(dis)
+                    map[path] = ScanCacheEntry(path, sizeBytes, lastModifiedMs, dirSig, song)
+                }
+                return map
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Scan cache invalid, ignored: ${e.message}")
+            return emptyMap()
+        }
+    }
+
+    private fun saveScanCache(songs: List<Song>, tree: ScanTree) {
+        try {
+            val target = scanCacheFile()
+            val tmp = File(target.parentFile, CACHE_FILE_NAME + ".tmp")
+            DataOutputStream(BufferedOutputStream(FileOutputStream(tmp), 65536)).use { dos ->
+                dos.writeInt(CACHE_MAGIC)
+                dos.writeInt(CACHE_VERSION)
+                dos.writeInt(songs.size)
+                for (song in songs) {
+                    val path = song.data
+                    val stat = tree.fileStats[path]
+                    writeString(dos, path)
+                    dos.writeLong(stat?.size ?: 0L)
+                    dos.writeLong(stat?.mtime ?: 0L)
+                    dos.writeLong(tree.dirSigs[File(path).parentFile?.absolutePath] ?: 0L)
+                    writeSong(dos, song)
+                }
+            }
+            if (!tmp.renameTo(target)) {
+                tmp.delete()
+                Log.w(TAG, "Failed to replace scan cache file")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to save scan cache: ${e.message}")
+        }
+    }
+
+    private fun writeSong(dos: DataOutputStream, song: Song) {
+        dos.writeLong(song.id)
+        writeString(dos, song.title)
+        writeString(dos, song.artist)
+        dos.writeLong(song.artistId)
+        writeString(dos, song.album)
+        dos.writeLong(song.albumId)
+        writeString(dos, song.albumArtist)
+        dos.writeLong(song.duration)
+        writeString(dos, song.data)
+        dos.writeLong(song.dateAdded)
+        dos.writeInt(song.track)
+        dos.writeInt(song.year)
+        writeString(dos, song.genre)
+        writeCompressed(dos, song.lyrics)
+        writeString(dos, song.mimeType)
+        dos.writeLong(song.size)
+        writeString(dos, song.source)
+    }
+
+    private fun readSong(dis: DataInputStream): Song {
+        val id = dis.readLong()
+        val title = readString(dis) ?: ""
+        val artist = readString(dis) ?: ""
+        val artistId = dis.readLong()
+        val album = readString(dis) ?: ""
+        val albumId = dis.readLong()
+        val albumArtist = readString(dis)
+        val duration = dis.readLong()
+        val data = readString(dis) ?: ""
+        val dateAdded = dis.readLong()
+        val track = dis.readInt()
+        val year = dis.readInt()
+        val genre = readString(dis)
+        val lyrics = readCompressed(dis)
+        val mimeType = readString(dis)
+        val size = dis.readLong()
+        val source = readString(dis) ?: "mediastore"
+        return Song(
+            id = id,
+            title = title,
+            artist = artist,
+            artistId = artistId,
+            album = album,
+            albumId = albumId,
+            albumArtist = albumArtist,
+            duration = duration,
+            data = data,
+            dateAdded = dateAdded,
+            track = track,
+            year = year,
+            genre = genre,
+            lyrics = lyrics,
+            mimeType = mimeType,
+            size = size,
+            source = source
+        )
+    }
+
+    private fun writeString(dos: DataOutputStream, value: String?) {
+        if (value == null) {
+            dos.writeInt(-1)
+            return
+        }
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        dos.writeInt(bytes.size)
+        dos.write(bytes)
+    }
+
+    private fun readString(dis: DataInputStream): String? {
+        val len = dis.readInt()
+        if (len < 0) return null
+        val bytes = ByteArray(len)
+        dis.readFully(bytes)
+        return String(bytes, Charsets.UTF_8)
+    }
+
+    private fun writeCompressed(dos: DataOutputStream, value: String?) {
+        if (value == null) {
+            dos.writeInt(-1)
+            return
+        }
+        val bytes = value.toByteArray(Charsets.UTF_8)
+        val bos = ByteArrayOutputStream()
+        GZIPOutputStream(bos).use { gzip -> gzip.write(bytes) }
+        val compressed = bos.toByteArray()
+        dos.writeInt(compressed.size)
+        dos.write(compressed)
+    }
+
+    private fun readCompressed(dis: DataInputStream): String? {
+        val len = dis.readInt()
+        if (len < 0) return null
+        val compressed = ByteArray(len)
+        dis.readFully(compressed)
+        return GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
+            gzip.readBytes().toString(Charsets.UTF_8)
         }
     }
 
@@ -409,5 +683,9 @@ class MusicRepository(private val context: Context) {
 
     companion object {
         private const val TAG = "MusicRepository"
+        private const val SCAN_PARALLELISM = 64
+        private const val CACHE_MAGIC = 0x4D555343
+        private const val CACHE_VERSION = 1
+        private const val CACHE_FILE_NAME = ".music_scan_cache"
     }
 }
