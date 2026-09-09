@@ -10,7 +10,13 @@ import java.util.concurrent.TimeUnit
 object UpdateChecker {
 
     private const val TAG = "UpdateChecker"
-    private const val UPDATE_URL = "https://raw.githubusercontent.com/power690/ShuYin/main/update.json"
+    private const val UPDATE_URL_CN = "https://gitee.com/cuteqwwtr/ShuYin/raw/main/update_cn.json"
+    private const val UPDATE_URL_INTL = "https://raw.githubusercontent.com/power690/ShuYin/main/update.json"
+
+    private fun updateUrl(): String {
+        val lang = Strings.currentLanguageCode()
+        return if (lang.startsWith("zh")) UPDATE_URL_CN else UPDATE_URL_INTL
+    }
 
     data class UpdateInfo(
         val versionCode: Int,
@@ -26,7 +32,7 @@ object UpdateChecker {
                 .readTimeout(15, TimeUnit.SECONDS)
                 .build()
             val request = Request.Builder()
-                .url(UPDATE_URL)
+                .url(updateUrl())
                 .header("Cache-Control", "no-cache")
                 .build()
             client.newCall(request).execute().use { response ->
