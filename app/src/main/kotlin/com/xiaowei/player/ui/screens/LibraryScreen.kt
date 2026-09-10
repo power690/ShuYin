@@ -1,5 +1,6 @@
 package com.xiaowei.player.ui.screens
 
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -18,10 +19,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +37,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -48,11 +55,15 @@ import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
-import com.xiaowei.player.ui.components.PlayAllButton
+import com.xiaowei.player.ui.components.BlurTopBarLayout
 import com.xiaowei.player.ui.components.SortButton
 import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
+import com.xiaowei.player.ui.components.blurTopBar
 import com.xiaowei.player.ui.components.sortSongs
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.launch
 
 private enum class LibraryTab(val labelKey: String) {
@@ -66,7 +77,7 @@ fun LibraryScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onSearch: (String) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenAlbum: (Long) -> Unit,
@@ -84,69 +95,104 @@ fun LibraryScreen(
     }
     val scope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = Strings.get("tab_library"),
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        PrimaryTabRow(
-            selectedTabIndex = pagerState.currentPage,
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ) {
-            tabs.forEachIndexed { i, tab ->
-                Tab(
-                    selected = pagerState.currentPage == i,
-                    onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
-                    text = { Text(Strings.get(tab.labelKey), fontWeight = if (pagerState.currentPage == i) FontWeight.SemiBold else FontWeight.Normal) }
-                )
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val songsListState = rememberLazyListState()
+    val artistsGridState = rememberLazyGridState()
+    val albumsGridState = rememberLazyGridState()
+    val titleScrolled by remember {
+        derivedStateOf {
+            if (!blurSupported) false
+            else when (tabs[pagerState.currentPage]) {
+                LibraryTab.Songs -> songsListState.canScrollBackward
+                LibraryTab.Artists -> artistsGridState.canScrollBackward
+                LibraryTab.Albums -> albumsGridState.canScrollBackward
             }
         }
+    }
 
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
+    BlurTopBarLayout(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings.get("tab_library"),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
 
-            beyondViewportPageCount = 1
-        ) { page ->
+                PrimaryTabRow(
+                    selectedTabIndex = pagerState.currentPage,
+                    containerColor = Color.Transparent
+                ) {
+                    tabs.forEachIndexed { i, tab ->
+                        Tab(
+                            selected = pagerState.currentPage == i,
+                            onClick = { scope.launch { pagerState.animateScrollToPage(i) } },
+                            text = { Text(Strings.get(tab.labelKey), fontWeight = if (pagerState.currentPage == i) FontWeight.SemiBold else FontWeight.Normal) }
+                        )
+                    }
+                }
+            }
+        },
+        content = { topBarHeight ->
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+
+                beyondViewportPageCount = 1
+            ) { page ->
             when (tabs[page]) {
                 LibraryTab.Songs -> SongsPane(
                     library = library,
                     playerState = playerState,
                     onPlaySong = onPlaySong,
-                    onPlayAll = onPlayAll,
+                    onAddSong = onAddSong,
                     onOpenPlayer = onOpenPlayer,
+                    hazeState = hazeState,
+                    blurEnabled = blurSupported,
+                    listState = songsListState,
+                    topPadding = topBarHeight + 4.dp,
                     bottomPadding = bottomPadding
                 )
                 LibraryTab.Artists -> ArtistsPane(
                     library = library,
                     onOpenArtist = onOpenArtist,
+                    hazeState = hazeState,
+                    blurEnabled = blurSupported,
+                    gridState = artistsGridState,
+                    topPadding = topBarHeight + 12.dp,
                     bottomPadding = bottomPadding
                 )
                 LibraryTab.Albums -> AlbumsPane(
                     library = library,
                     onOpenAlbum = onOpenAlbum,
+                    hazeState = hazeState,
+                    blurEnabled = blurSupported,
+                    gridState = albumsGridState,
+                    topPadding = topBarHeight + 12.dp,
                     bottomPadding = bottomPadding
                 )
             }
+            }
         }
-    }
+    )
 }
 
 @Composable
@@ -154,8 +200,12 @@ private fun SongsPane(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onOpenPlayer: () -> Unit,
+    hazeState: HazeState,
+    blurEnabled: Boolean,
+    listState: LazyListState,
+    topPadding: Dp,
     bottomPadding: Dp = 168.dp
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
@@ -176,15 +226,14 @@ private fun SongsPane(
     }
     val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(top = 4.dp, bottom = bottomPadding)
+        state = listState,
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
+        contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                PlayAllButton(
-                    onPlayAll = { onPlayAll(sortedSongs) },
-                    modifier = Modifier.weight(1f)
-                )
                 SortButton(
                     sortOption = sortOption,
                     onSortOptionChange = { sortOption = it }
@@ -202,8 +251,9 @@ private fun SongsPane(
                 isCurrent = playerState.currentSong?.id == song.id,
                 onClick = {
                     if (playerState.currentSong?.id == song.id) onOpenPlayer()
-                    else onPlaySong(song, songs)
-                }
+                    else onPlaySong(song, sortedSongs)
+                },
+                onAdd = { onAddSong(song) }
             )
         }
     }
@@ -213,6 +263,10 @@ private fun SongsPane(
 private fun ArtistsPane(
     library: LibraryState,
     onOpenArtist: (String) -> Unit,
+    hazeState: HazeState,
+    blurEnabled: Boolean,
+    gridState: LazyGridState,
+    topPadding: Dp,
     bottomPadding: Dp = 168.dp
 ) {
     val artists = library.filteredArtists
@@ -231,9 +285,12 @@ private fun ArtistsPane(
         return
     }
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(minSize = 150.dp),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding)
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPadding, bottom = bottomPadding)
     ) {
         items(
             items = artists,
@@ -252,6 +309,10 @@ private fun ArtistsPane(
 private fun AlbumsPane(
     library: LibraryState,
     onOpenAlbum: (Long) -> Unit,
+    hazeState: HazeState,
+    blurEnabled: Boolean,
+    gridState: LazyGridState,
+    topPadding: Dp,
     bottomPadding: Dp = 168.dp
 ) {
     val albums = library.filteredAlbums
@@ -270,9 +331,12 @@ private fun AlbumsPane(
         return
     }
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(minSize = 150.dp),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = bottomPadding)
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPadding, bottom = bottomPadding)
     ) {
         items(
             items = albums,

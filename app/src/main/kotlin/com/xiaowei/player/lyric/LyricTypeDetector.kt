@@ -1,5 +1,7 @@
 package com.xiaowei.player.lyric
 
+import com.xiaowei.player.data.TtmlParser
+
 
 object LyricTypeDetector {
 
@@ -12,6 +14,8 @@ object LyricTypeDetector {
     
     fun detect(lyricsText: String?, lyricSource: String? = null): LyricType {
         if (lyricsText.isNullOrBlank()) return LyricType.NONE
+
+        if (TtmlParser.looksLikeTtml(lyricsText)) return LyricType.ALREADY_OK
 
         
         val lineTimestampRe = Regex("\\[\\d{2}:\\d{2}[.:.]?\\d{0,3}\\]")

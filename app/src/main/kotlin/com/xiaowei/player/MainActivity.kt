@@ -13,6 +13,10 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,7 +31,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.xiaowei.player.data.DarkModePrefs
@@ -38,11 +46,14 @@ import com.xiaowei.player.player.PlaybackService
 import com.xiaowei.player.ui.ShuYinApp
 import com.xiaowei.player.ui.screens.UpdateCheckerHost
 import com.xiaowei.player.ui.theme.ZMusicTheme
+import kotlinx.coroutines.delay
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
     private val viewModel: MainViewModel by viewModels()
+
+    private var showSplash by mutableStateOf(true)
 
     private var floatingLyricEnabled by mutableStateOf(false)
 
@@ -108,6 +119,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        showSplash = savedInstanceState == null
+
         isSystemDarkTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
         com.xiaowei.player.data.LocalePrefs.get(this).languageCode?.let {
@@ -160,6 +173,14 @@ class MainActivity : ComponentActivity() {
                 reassertSystemBarAppearance()
             }
             ZMusicTheme(darkTheme = effectiveDark) {
+
+                LaunchedEffect(showSplash) {
+                    if (showSplash) {
+                        delay(2000L)
+                        showSplash = false
+                    }
+                }
+
                 val state by viewModel.library.collectAsState()
                 val playerState by viewModel.playerManager.state.collectAsState()
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -188,8 +209,8 @@ class MainActivity : ComponentActivity() {
                             library = state,
                             playerState = playerState,
                             playerPlaylist = viewModel.playerManager.playlist,
-                            onPlaySong = { song, list -> viewModel.playSongFromList(list, song) },
-                            onPlayAll = viewModel::playAll,
+                            onPlaySong = { song, list -> viewModel.playAllFrom(list, song) },
+                            onAddSong = { song -> viewModel.addToQueue(song) },
                             onRefresh = {
 
                                 val customPath = com.xiaowei.player.data.CustomPathPrefs
@@ -235,6 +256,29 @@ class MainActivity : ComponentActivity() {
                             onCheckRequested = { },
                             manualTrigger = null
                         )
+
+                        AnimatedVisibility(
+                            visible = showSplash,
+                            exit = fadeOut(animationSpec = tween(durationMillis = 300))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        if (effectiveDark) Color(0xFF16161E) else Color(0xFFFCE7DA)
+                                    )
+                            ) {
+                                Image(
+                                    painter = painterResource(
+                                        if (effectiveDark) R.drawable.splash_dark
+                                        else R.drawable.splash_light
+                                    ),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                        }
                     }
                 }
             }

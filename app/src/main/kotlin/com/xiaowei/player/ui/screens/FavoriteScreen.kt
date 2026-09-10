@@ -5,10 +5,12 @@ import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,10 +27,12 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.SelectAll
@@ -41,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,10 +64,13 @@ import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
-import com.xiaowei.player.ui.components.PlayAllButton
+import com.xiaowei.player.ui.components.BlurTopBarLayout
 import com.xiaowei.player.ui.components.SortButton
 import com.xiaowei.player.ui.components.SortOption
+import com.xiaowei.player.ui.components.blurTopBar
 import com.xiaowei.player.ui.components.sortSongs
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import java.io.File
 
 @Composable
@@ -70,7 +78,7 @@ fun FavoriteScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onRemoveFavorites: (List<Long>) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
@@ -99,20 +107,26 @@ fun FavoriteScreen(
         exitSelection()
     }
 
-    Column(
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val listState = rememberLazyListState()
+    val titleScrolled by remember {
+        derivedStateOf { blurSupported && listState.canScrollBackward }
+    }
+
+    BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             IconButton(onClick = {
                 if (selectionMode) exitSelection()
                 else onBack()
@@ -156,8 +170,9 @@ fun FavoriteScreen(
                     )
                 }
             }
-        }
-
+            }
+        },
+        content = { topBarHeight ->
         if (favoriteSongs.isEmpty()) {
 
             Box(
@@ -173,19 +188,18 @@ fun FavoriteScreen(
                 )
             }
         } else {
+            Column(modifier = Modifier.fillMaxSize()) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
-                contentPadding = PaddingValues(bottom = if (selectionMode) 120.dp else 80.dp)
+                    .fillMaxWidth()
+                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
+                contentPadding = PaddingValues(top = topBarHeight, bottom = if (selectionMode) 120.dp else 80.dp)
             ) {
                 if (!selectionMode) {
                     item {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            PlayAllButton(
-                                onPlayAll = { onPlayAll(sortedSongs) },
-                                modifier = Modifier.weight(1f)
-                            )
                             SortButton(
                                 sortOption = sortOption,
                                 onSortOptionChange = { sortOption = it }
@@ -217,7 +231,8 @@ fun FavoriteScreen(
                             } else if (!isSelected) {
                                 selectedIds = selectedIds + song.id
                             }
-                        }
+                        },
+                        onAdd = { onAddSong(song) }
                     )
                 }
             }
@@ -289,8 +304,10 @@ fun FavoriteScreen(
                     }
                 }
             }
+                }
         }
-    }
+        }
+    )
 }
 
 @Composable
@@ -301,7 +318,8 @@ private fun FavoriteSongRow(
     isSelected: Boolean,
     showCheck: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onAdd: () -> Unit
 ) {
     Row(
         modifier = Modifier
@@ -346,6 +364,24 @@ private fun FavoriteSongRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+        if (!showCheck) {
+            Spacer(Modifier.width(6.dp))
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(onClick = onAdd),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = Strings.get("add_to_playlist"),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
         }
         if (showCheck) {
             Spacer(Modifier.width(8.dp))

@@ -17,8 +17,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 19
-        versionName = "1.9.3"
+        versionCode = 20
+        versionName = "2.0.0"
         vectorDrawables { useSupportLibrary = true }
 
         externalNativeBuild {
@@ -133,6 +133,7 @@ dependencies {
     implementation(libs.backdrop)
     implementation(libs.material.kolor)
     implementation(libs.androidx.palette.ktx)
+    implementation(libs.haze)
 
     debugImplementation(libs.androidx.ui.tooling)
 }

@@ -1,6 +1,7 @@
 package com.xiaowei.player.ui.components
 
 import android.net.Uri
+import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,12 +53,14 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +69,11 @@ import coil.request.ImageRequest
 import com.xiaowei.player.data.EmbeddedCoverFetcher
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
+import dev.chrisbanes.haze.HazeDefaults
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.HazeTint
+import dev.chrisbanes.haze.hazeEffect
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -137,58 +144,6 @@ fun AlbumCover(
                 )
             }
         }
-    }
-}
-
-@Composable
-fun PlayAllButton(
-    onPlayAll: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
-        label = "playAllButtonScale"
-    )
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .clip(RoundedCornerShape(20.dp))
-            .clickable(
-                interactionSource = interactionSource,
-                indication = ripple(),
-                onClick = onPlayAll
-            )
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(28.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.PlayArrow,
-                contentDescription = Strings.get("play_all"),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.size(15.dp)
-            )
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            text = Strings.get("play_all"),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            fontWeight = FontWeight.Medium
-        )
     }
 }
 
@@ -502,5 +457,51 @@ fun TitleSubtitle(
             maxLines = maxLinesSubtitle,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+@Composable
+fun Modifier.blurTopBar(
+    hazeState: HazeState,
+    scrolled: Boolean
+): Modifier {
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    return this.then(
+        when {
+            !blurSupported -> Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow)
+            scrolled -> Modifier.hazeEffect(
+                hazeState,
+                style = HazeStyle(
+                    backgroundColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    tint = HazeTint(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.6f)),
+                    blurRadius = 20.dp,
+                    noiseFactor = HazeDefaults.noiseFactor
+                )
+            )
+            else -> Modifier
+        }
+    )
+}
+
+private enum class BlurLayoutSlot { TopBar, Content }
+
+@Composable
+fun BlurTopBarLayout(
+    modifier: Modifier = Modifier,
+    topBar: @Composable () -> Unit,
+    content: @Composable (topBarHeight: Dp) -> Unit
+) {
+    SubcomposeLayout(modifier = modifier) { constraints ->
+        val topBarPlaceable = subcompose(BlurLayoutSlot.TopBar, topBar).map {
+            it.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        }.first()
+        val topBarHeight = topBarPlaceable.height.toDp()
+        val contentPlaceable = subcompose(BlurLayoutSlot.Content) { content(topBarHeight) }.map {
+            it.measure(constraints.copy(minWidth = 0, minHeight = 0))
+        }.first()
+        layout(constraints.maxWidth, constraints.maxHeight) {
+            contentPlaceable.place(0, 0)
+            topBarPlaceable.place(0, 0)
+        }
     }
 }

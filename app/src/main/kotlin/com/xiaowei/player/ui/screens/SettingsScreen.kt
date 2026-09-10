@@ -64,6 +64,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -87,8 +88,12 @@ import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
+import com.xiaowei.player.ui.components.BlurTopBarLayout
 import com.xiaowei.player.ui.components.M3ExpressiveSwitch
+import com.xiaowei.player.ui.components.blurTopBar
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 private enum class SettingIconTone {
     PRIMARY, SECONDARY, TERTIARY, ERROR, NEUTRAL
@@ -411,19 +416,26 @@ fun SettingsScreen(
         }
     }
 
-    Column(
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val scrollState = rememberScrollState()
+    val titleScrolled by remember {
+        derivedStateOf { blurSupported && scrollState.value > 0 }
+    }
+
+    BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-            .statusBarsPadding()
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+                    .statusBarsPadding()
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             IconButton(onClick = onBack) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -437,14 +449,16 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
-        }
-
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(top = 4.dp, bottom = 96.dp)
-        ) {
+            }
+        },
+        content = { topBarHeight ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier)
+                    .verticalScroll(scrollState)
+                    .padding(top = topBarHeight + 4.dp, bottom = 96.dp)
+            ) {
 
             SettingsCategoryHeader(
                 text = Strings.get("settings_category_theme"),
@@ -629,7 +643,8 @@ fun SettingsScreen(
                 }
             )
         }
-    }
+        }
+    )
 
     if (showLanguagePicker) {
         LanguagePickerSheet(

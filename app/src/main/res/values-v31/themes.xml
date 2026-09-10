@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.ZMusic" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.ZMusic" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+
         <item name="android:windowLightNavigationBar">false</item>
-        <item name="android:windowBackground">@drawable/splash_window_dark</item>
+        <item name="android:windowBackground">@drawable/splash_window_light</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg_light</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_empty</item>
     </style>
 </resources>

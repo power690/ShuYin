@@ -29,6 +29,7 @@ object LyricsParser {
 
     fun parse(raw: String?): List<LyricLine> {
         if (raw.isNullOrBlank()) return emptyList()
+        if (TtmlParser.looksLikeTtml(raw)) return TtmlParser.parse(raw)
 
         val lines = raw.split('\n', '\r').filter { it.isNotBlank() }
         val hasTimeTag = lines.any { timeTagRegex.containsMatchIn(it) }

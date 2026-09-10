@@ -106,7 +106,7 @@ fun ShuYinApp(
     playerState: MusicPlayerManager.PlayerState,
     playerPlaylist: List<com.xiaowei.player.data.Song>,
     onPlaySong: (com.xiaowei.player.data.Song, List<com.xiaowei.player.data.Song>) -> Unit,
-    onPlayAll: (List<com.xiaowei.player.data.Song>) -> Unit,
+    onAddSong: (com.xiaowei.player.data.Song) -> Unit,
     onRefresh: () -> Unit,
     onSearch: (String) -> Unit,
     onTogglePlayPause: () -> Unit,
@@ -408,7 +408,7 @@ fun ShuYinApp(
                                             library = library,
                                             playerState = playerState,
                                             onPlaySong = onPlaySong,
-                                            onPlayAll = onPlayAll,
+                                            onAddSong = onAddSong,
                                             onOpenArtist = { requestDetail(Detail.Artist(it)) },
                                             onOpenAlbum = { requestDetail(Detail.Album(it)) },
                                             onOpenPlayer = { playerExpanded = true },
@@ -425,7 +425,7 @@ fun ShuYinApp(
                                             library = library,
                                             playerState = playerState,
                                             onPlaySong = onPlaySong,
-                                            onPlayAll = onPlayAll,
+                                            onAddSong = onAddSong,
                                             onSearch = onSearch,
                                             onOpenArtist = { requestDetail(Detail.Artist(it)) },
                                             onOpenAlbum = { requestDetail(Detail.Album(it)) },
@@ -442,7 +442,7 @@ fun ShuYinApp(
                                             library = library,
                                             playerState = playerState,
                                             onPlaySong = onPlaySong,
-                                            onPlayAll = onPlayAll,
+                                            onAddSong = onAddSong,
                                             onBack = {},
                                             onOpenPlayer = { playerExpanded = true },
                                             isActive = mainPagerState.currentPage == page,
@@ -547,7 +547,7 @@ fun ShuYinApp(
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
-                                    onPlayAll = onPlayAll,
+                                    onAddSong = onAddSong,
                                     onBack = { popDetail() },
                                     onOpenAlbum = { requestDetail(Detail.Album(it)) },
                                     onOpenPlayer = { playerExpanded = true }
@@ -557,7 +557,7 @@ fun ShuYinApp(
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
-                                    onPlayAll = onPlayAll,
+                                    onAddSong = onAddSong,
                                     onBack = { popDetail() },
                                     onOpenPlayer = { playerExpanded = true }
                                 )
@@ -565,7 +565,7 @@ fun ShuYinApp(
                                     card = (displayedDetail as Detail.RecommendDetail).card,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
-                                    onPlayAll = onPlayAll,
+                                    onAddSong = onAddSong,
                                     onBack = { popDetail() },
                                     onOpenPlayer = { playerExpanded = true }
                                 )
@@ -573,7 +573,7 @@ fun ShuYinApp(
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
-                                    onPlayAll = onPlayAll,
+                                    onAddSong = onAddSong,
                                     onBack = { popDetail() },
                                     onOpenPlayer = { playerExpanded = true }
                                 )
@@ -581,7 +581,7 @@ fun ShuYinApp(
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
-                                    onPlayAll = onPlayAll,
+                                    onAddSong = onAddSong,
                                     onRemoveFavorites = onRemoveFavorites,
                                     onBack = { popDetail() },
                                     onOpenPlayer = { playerExpanded = true }

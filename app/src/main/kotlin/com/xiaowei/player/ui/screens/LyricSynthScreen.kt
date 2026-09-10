@@ -1,6 +1,7 @@
 package com.xiaowei.player.ui.screens
 
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -59,6 +61,10 @@ import com.xiaowei.player.LyricFacade
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.scanner.MusicScanner
 import com.xiaowei.player.ui.components.AlbumCover
+import com.xiaowei.player.ui.components.BlurTopBarLayout
+import com.xiaowei.player.ui.components.blurTopBar
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withPermit
@@ -117,19 +123,26 @@ fun LyricSynthScreen(onBack: () -> Unit) {
         }
     }
 
-    Column(
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val listState = rememberLazyListState()
+    val titleScrolled by remember {
+        derivedStateOf { blurSupported && listState.canScrollBackward }
+    }
+
+    BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
             IconButton(onClick = onBack) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
@@ -159,18 +172,22 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                     )
                 }
             }
-        }
-
+            }
+        },
+        content = { topBarHeight ->
         when {
             selectedPath == null -> PickerCenter(pickFolder = { pickFolder() })
             scanning -> ScanningCenter()
             items.isEmpty() -> EmptyCenter(pickFolder = { pickFolder() })
             else -> {
+                Column(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth(),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 96.dp)
+                        .fillMaxWidth()
+                        .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(top = topBarHeight, bottom = 96.dp)
                 ) {
                     items(items, key = { it.filePath }) { item ->
                         val isSelected = selectedIds.contains(item.filePath)
@@ -249,9 +266,11 @@ fun LyricSynthScreen(onBack: () -> Unit) {
                         }
                     }
                 }
+                }
             }
         }
-    }
+        }
+    )
 
     synthProgress?.let { prog ->
         Dialog(

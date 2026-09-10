@@ -10,4 +10,7 @@
 
     <color name="startup_bg_light">#FFFEF7FF</color>
     <color name="startup_bg_dark">#FF141218</color>
+
+    <color name="splash_bg_light">#FFFCE7DA</color>
+    <color name="splash_bg_dark">#FF16161E</color>
 </resources>

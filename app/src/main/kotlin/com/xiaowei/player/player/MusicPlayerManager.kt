@@ -194,11 +194,13 @@ class MusicPlayerManager(
     fun requestPlaySong(song: Song) {
         if (playlist.isEmpty()) {
             playQueue(listOf(song), 0)
+            showAddedToNextToast()
             return
         }
         val existingIdx = playlist.indexOfFirst { it.id == song.id }
         if (existingIdx >= 0) {
-            playAtIndex(existingIdx)
+            moveSongToNext(existingIdx)
+            showAddedToNextToast()
             return
         }
         val insertAt = (_state.value.currentIndex + 1).coerceIn(0, playlist.size)
@@ -213,6 +215,33 @@ class MusicPlayerManager(
         } else {
             savePlaybackStateSnapshot(positionMs = player.currentPosition)
         }
+        showAddedToNextToast()
+    }
+
+    private fun moveSongToNext(index: Int) {
+        val current = _state.value.currentIndex
+        if (index == current) return
+        val target = if (index > current) current + 1 else current
+        try {
+            player.moveMediaItem(index, target)
+        } catch (_: Exception) {
+            return
+        }
+        playlist = playlist.toMutableList().apply {
+            val item = removeAt(index)
+            add(target, item)
+        }
+        val newCurrent = if (index < current) current - 1 else current
+        _state.update {
+            it.copy(
+                currentSong = playlist.getOrNull(newCurrent),
+                currentIndex = newCurrent
+            )
+        }
+        savePlaybackStateSnapshot(positionMs = player.currentPosition)
+    }
+
+    private fun showAddedToNextToast() {
         android.widget.Toast.makeText(
             context,
             com.xiaowei.player.i18n.Strings.get("added_to_play_next"),
@@ -220,19 +249,12 @@ class MusicPlayerManager(
         ).show()
     }
 
-    fun addAllToQueue(songs: List<Song>) {
+    fun playAllFrom(songs: List<Song>, song: Song) {
         if (songs.isEmpty()) return
-        if (playlist.isEmpty()) {
-            playQueue(songs, 0)
-            return
+        val startIndex = songs.indexOfFirst { it.id == song.id }.let {
+            if (it >= 0) it else 0
         }
-        val existingIds = HashSet<Long>()
-        playlist.forEach { existingIds.add(it.id) }
-        val newSongs = songs.filter { it.id !in existingIds }
-        if (newSongs.isEmpty()) return
-        playlist = playlist + newSongs
-        player.addMediaItems(newSongs.map { it.toMediaItem() })
-        savePlaybackStateSnapshot(positionMs = player.currentPosition)
+        playQueue(songs, startIndex)
     }
 
     fun removeFromQueue(index: Int) {

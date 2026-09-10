@@ -5,7 +5,10 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
+
         <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowBackground">@drawable/splash_window_dark</item>
+        <item name="android:windowSplashScreenBackground">@color/splash_bg_dark</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icon_empty</item>
     </style>
 </resources>

@@ -1,5 +1,6 @@
 package com.xiaowei.player.ui.screens
 
+import android.os.Build
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -25,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
@@ -47,6 +49,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -75,14 +78,17 @@ import com.xiaowei.player.data.RecommendCard
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
+import com.xiaowei.player.ui.components.BlurTopBarLayout
 import com.xiaowei.player.ui.components.GradientScrim
-import com.xiaowei.player.ui.components.PlayAllButton
 import com.xiaowei.player.ui.components.SortButton
 import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
+import com.xiaowei.player.ui.components.blurTopBar
 import com.xiaowei.player.ui.components.sortSongs
 import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -94,7 +100,7 @@ fun RecommendScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onOpenArtist: (String) -> Unit,
     onOpenAlbum: (Long) -> Unit,
     onOpenPlayer: () -> Unit,
@@ -104,33 +110,42 @@ fun RecommendScreen(
 
     bottomPadding: Dp = 168.dp
 ) {
-    Column(
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val titleScrolled by remember {
+        derivedStateOf { blurSupported && listState.canScrollBackward }
+    }
+
+    BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = Strings.get("app_name"),
-                style = MaterialTheme.typography.headlineLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = bottomPadding)
-        ) {
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = Strings.get("app_name"),
+                    style = MaterialTheme.typography.headlineLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        },
+        content = { topBarHeight ->
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
+                contentPadding = PaddingValues(top = topBarHeight, bottom = bottomPadding)
+            ) {
 
             item {
                 Text(
@@ -226,9 +241,11 @@ fun RecommendScreen(
                 }
             }
         }
-        }   
-    }       
-}           
+        }
+
+        }
+    )
+}
 
 @Composable
 private fun RecommendCardItem(
@@ -408,7 +425,7 @@ fun RecommendDetailScreen(
     card: RecommendCard,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit
 ) {
@@ -417,42 +434,52 @@ fun RecommendDetailScreen(
     var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
     val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
 
-    Column(
+    val hazeState = rememberHazeState()
+    val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val listState = rememberLazyListState()
+    val titleScrolled by remember {
+        derivedStateOf { blurSupported && listState.canScrollBackward }
+    }
+
+    BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
-    ) {
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceContainerLow)
-                .statusBarsPadding()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = Strings.get("back"),
-                    tint = MaterialTheme.colorScheme.onSurface
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .blurTopBar(hazeState, titleScrolled)
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = Strings.get("back"),
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = card.title,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
             }
-            Text(
-                text = card.title,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(bottom = 80.dp)
-        ) {
+        },
+        content = { topBarHeight ->
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
+                contentPadding = PaddingValues(top = topBarHeight, bottom = 80.dp)
+            ) {
 
             item {
                 Box(
@@ -483,10 +510,6 @@ fun RecommendDetailScreen(
         if (songs.isNotEmpty()) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PlayAllButton(
-                        onPlayAll = { onPlayAll(sortedSongs) },
-                        modifier = Modifier.weight(1f)
-                    )
                     SortButton(
                         sortOption = sortOption,
                         onSortOptionChange = { sortOption = it }
@@ -517,12 +540,14 @@ fun RecommendDetailScreen(
                     onClick = {
                         if (playerState.currentSong?.id == song.id) onOpenPlayer()
                         else onPlaySong(song, sortedSongs)
-                    }
+                    },
+                    onAdd = { onAddSong(song) }
                 )
             }
         }
-        } 
-    } 
+        }
+        }
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -531,7 +556,7 @@ fun SearchScreen(
     library: LibraryState,
     playerState: MusicPlayerManager.PlayerState,
     onPlaySong: (Song, List<Song>) -> Unit,
-    onPlayAll: (List<Song>) -> Unit,
+    onAddSong: (Song) -> Unit,
     onBack: () -> Unit,
     onOpenPlayer: () -> Unit,
     isActive: Boolean = true,
@@ -782,10 +807,6 @@ fun SearchScreen(
                 }
                 item {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PlayAllButton(
-                            onPlayAll = { onPlayAll(sortedResults) },
-                            modifier = Modifier.weight(1f)
-                        )
                         SortButton(
                             sortOption = sortOption,
                             onSortOptionChange = { sortOption = it }
@@ -802,7 +823,8 @@ fun SearchScreen(
                             hideKeyboardAndClearFocus()
                             if (playerState.currentSong?.id == song.id) onOpenPlayer()
                             else onPlaySong(song, sortedResults)
-                        }
+                        },
+                        onAdd = { onAddSong(song) }
                     )
                 }
             }

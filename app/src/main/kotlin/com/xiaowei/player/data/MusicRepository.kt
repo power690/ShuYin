@@ -378,6 +378,9 @@ class MusicRepository(private val context: Context) {
             "$base.LRC",
             "$base - 歌词.lrc",
             "$base.lrc.txt",
+            "$base.ttml",
+            "$base.TTML",
+            "$base - 歌词.ttml",
             "$base.txt"
         )
         for (name in candidates) {

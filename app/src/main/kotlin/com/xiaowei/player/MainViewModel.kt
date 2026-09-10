@@ -10,7 +10,6 @@ import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.RecommendCard
 import com.xiaowei.player.data.Song
-import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -156,23 +155,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun isFavorite(songId: Long): Boolean = favoriteRepo.isFavoriteSync(songId)
 
-    fun playSong(song: Song) {
-        playerManager.requestPlaySong(song)
+    fun playAllFrom(songs: List<Song>, song: Song) {
+        playerManager.playAllFrom(songs, song)
     }
 
-    fun playSongFromList(songs: List<Song>, song: Song) {
+    fun addToQueue(song: Song) {
         playerManager.requestPlaySong(song)
-    }
-
-    fun playAll(songs: List<Song>) {
-        if (songs.isNotEmpty()) {
-            playerManager.addAllToQueue(songs)
-            android.widget.Toast.makeText(
-                getApplication(),
-                Strings.get("play_all_done"),
-                android.widget.Toast.LENGTH_SHORT
-            ).show()
-        }
     }
 
     override fun onCleared() {
