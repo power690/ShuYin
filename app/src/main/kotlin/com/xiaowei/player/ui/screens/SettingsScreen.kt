@@ -52,6 +52,7 @@ import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material.icons.outlined.Wallpaper
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -310,7 +311,8 @@ fun SettingsScreen(
     onCustomPathConfirm: (String) -> Unit = {},
     onToggleMixWithOthers: (Boolean) -> Unit = {},
     onOpenMaterialSettings: () -> Unit = {},
-    onOpenPlayerStyle: () -> Unit = {}
+    onOpenPlayerStyle: () -> Unit = {},
+    onOpenSponsor: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
@@ -610,6 +612,13 @@ fun SettingsScreen(
                     clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_qq_group"), qqGroupNumber))
                     Toast.makeText(context, Strings.get("mine_qq_copied", qqGroupNumber), Toast.LENGTH_SHORT).show()
                 }
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.VolunteerActivism,
+                tone = SettingIconTone.ERROR,
+                title = Strings.get("sponsor_title"),
+                onClick = onOpenSponsor
             )
 
             val projectUrl = "https://github.com/power690/ShuYin"
