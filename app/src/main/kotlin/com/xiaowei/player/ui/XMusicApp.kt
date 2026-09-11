@@ -68,7 +68,6 @@ import com.xiaowei.player.ui.screens.EmptyScanScreen
 import com.xiaowei.player.ui.screens.FavoriteScreen
 import com.xiaowei.player.ui.screens.LibraryScreen
 import com.xiaowei.player.ui.screens.LoadingScreen
-import com.xiaowei.player.ui.screens.LyricSynthScreen
 import com.xiaowei.player.ui.screens.PlayerStyleScreen
 import com.xiaowei.player.ui.screens.MineScreen
 import com.xiaowei.player.ui.screens.NoPermissionScreen
@@ -100,7 +99,6 @@ sealed class Detail {
     object Favorite : Detail()
     object Settings : Detail()
     object MaterialSettings : Detail()
-    object LyricSynth : Detail()
     object PlayerStyle : Detail()
     object Sponsor : Detail()
     object None : Detail()
@@ -473,7 +471,6 @@ fun ShuYinApp(
                                     Tab.Mine -> MineScreen(
                                         onOpenFavorite = { requestDetail(Detail.Favorite) },
                                         onOpenSettings = { requestDetail(Detail.Settings) },
-                                        onOpenLyricSynth = { requestDetail(Detail.LyricSynth) },
                                         bottomPadding = bottomReserved + 88.dp
                                     )
                                 }
@@ -641,9 +638,6 @@ fun ShuYinApp(
                                     onOpenSponsor = { requestDetail(Detail.Sponsor) }
                                 )
                                 Detail.MaterialSettings -> MaterialSettingsScreen(
-                                    onBack = { popDetail() }
-                                )
-                                Detail.LyricSynth -> LyricSynthScreen(
                                     onBack = { popDetail() }
                                 )
                                 Detail.PlayerStyle -> PlayerStyleScreen(

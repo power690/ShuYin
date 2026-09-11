@@ -159,7 +159,6 @@ private fun MineActionItem(
 fun MineScreen(
     onOpenFavorite: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
-    onOpenLyricSynth: () -> Unit = {},
     bottomPadding: Dp = 168.dp
 ) {
     val context = LocalContext.current
