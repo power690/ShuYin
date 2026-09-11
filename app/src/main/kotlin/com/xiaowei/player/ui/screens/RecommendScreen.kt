@@ -48,6 +48,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -71,6 +72,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Album
 import com.xiaowei.player.data.Artist
@@ -94,6 +98,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
+import kotlin.random.Random
 
 @Composable
 fun RecommendScreen(
@@ -115,26 +121,44 @@ fun RecommendScreen(
     val titleScrolled by remember {
         derivedStateOf { blurSupported && listState.canScrollBackward }
     }
+    val greetingKey = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        val pool = when (hour) {
+            in 5..8 -> listOf("greeting_morning_1", "greeting_morning_2", "greeting_morning_3")
+            in 9..11 -> listOf("greeting_forenoon_1", "greeting_forenoon_2", "greeting_forenoon_3")
+            in 12..17 -> listOf("greeting_afternoon_1", "greeting_afternoon_2", "greeting_afternoon_3")
+            in 18..23 -> listOf("greeting_evening_1", "greeting_evening_2", "greeting_evening_3")
+            else -> listOf("greeting_night_1", "greeting_night_2")
+        }
+        pool[Random.nextInt(pool.size)]
+    }
 
     BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.surfaceContainerLow),
         topBar = {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .blurTopBar(hazeState, titleScrolled)
                     .statusBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
                 Text(
                     text = Strings.get("app_name"),
                     style = MaterialTheme.typography.headlineLarge,
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f)
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = Strings.get(greetingKey),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         },
@@ -617,6 +641,18 @@ fun SearchScreen(
             keyboardController?.hide()
             focusManager.clearFocus()
         }
+    }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     val results = remember(query, library.songs) {
