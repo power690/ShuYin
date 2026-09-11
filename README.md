@@ -14,6 +14,7 @@
 ### 🎨 界面设计
 - **Jetpack Compose 全量构建**：纯 Compose UI，Material 3 设计
 - **液态玻璃导航栏**：底部导航栏与迷你播放卡片采用液态玻璃效果（Android 13+ 折射透镜+色差、Android 12 磨砂+饱和度、Android 11 及以下不透明主题色），果冻挤压拖动动画、按压光斑
+- **标题栏毛玻璃**：页面滚动时标题栏实时模糊背景，基于开源模糊库 [Haze](https://github.com/chrisbanes/haze)（Android 12+，低版本自动降级为纯色）
 - **iOS 风格转场动画**：二级页面 push 时主页压缩 + 高斯模糊（Android 12+），弹簧动画
 - **动态取色**：Android 12+ 跟随系统壁纸动态取色
 - **主题色自定义**：10 种预设主题色，Android 11 及以下使用预设主题色
@@ -71,6 +72,7 @@
 | **播放器** | AndroidX Media3 (ExoPlayer) |
 | **FLAC 解码** | HeHang0 预编译的 ExoPlayer FLAC 扩展（libFLAC native）|
 | **液态玻璃** | Kyant0 Backdrop / AndroidLiquidGlass（Compose Liquid Glass）|
+| **标题栏模糊** | Haze（Compose 毛玻璃实时模糊，Android 12+）|
 | **数据库** | Room（收藏 / 搜索历史 / 播放状态 / 桌面歌词设置 / 用户资料）|
 | **图片加载** | Coil（内存缓存 25% + 磁盘缓存 100MB）|
 | **架构** | MVVM + ViewModel + StateFlow |
@@ -81,7 +83,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v1.5.0.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v2.1.0.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
@@ -153,6 +155,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 - Jetpack Compose / Media3 / Room / Coil：Apache License 2.0
 - HeHang0 ExoPlayer FLAC 扩展：Apache License 2.0
 - Kyant0 Backdrop 液态玻璃库（AndroidLiquidGlass）：Apache License 2.0
+- Haze 模糊库（dev.chrisbanes.haze）：Apache License 2.0
 - mp3agic：MIT License
 
 ## 💬 项目交流与反馈
@@ -172,6 +175,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 ## 🙏 致谢
 
 - [AndroidLiquidGlass（Backdrop）](https://github.com/Kyant0/AndroidLiquidGlass) - 液态玻璃效果与果冻拖动/按压光斑交互方案（Kyant0）
+- [Haze](https://github.com/chrisbanes/haze) - 标题栏滚动毛玻璃模糊效果（Chris Banes）
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - 二级页面转场动画方案
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - 部分代码参考
 - [HeHang0](https://github.com/HeHang0) - ExoPlayer FLAC 扩展预编译版
@@ -182,7 +186,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 📊 项目状态
 
-- **当前版本**：v1.5.0
+- **当前版本**：v2.1.0
 - **最低支持**：Android 6.0 (API 23)
 - **目标版本**：Android 17 (API 37)
 
@@ -204,6 +208,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ### 🎨 UI Design
 - **Fully Jetpack Compose**: Pure Compose UI with Material 3 design
 - **Liquid Glass Navigation Bar**: Bottom navigation bar and mini player card with liquid glass effects (Android 13+ refraction lens + chromatic aberration, Android 12 frosted + vibrancy, Android 11 and below opaque theme color), jelly squash drag animation, press highlight
+- **Title Bar Blur**: Real-time background blur on the title bar when scrolling, powered by the open-source blur library [Haze](https://github.com/chrisbanes/haze) (Android 12+, falls back to solid color on lower versions)
 - **iOS-style Transitions**: Secondary pages push with background compression + Gaussian blur (Android 12+), spring animations
 - **Dynamic Color**: Android 12+ follows system wallpaper for dynamic theming
 - **Theme Customization**: 10 preset theme colors; Android 11 and below uses preset theme color
@@ -261,6 +266,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 | **Player** | AndroidX Media3 (ExoPlayer) |
 | **FLAC Decoding** | HeHang0's precompiled ExoPlayer FLAC extension (libFLAC native) |
 | **Liquid Glass** | Kyant0 Backdrop / AndroidLiquidGlass (Compose Liquid Glass) |
+| **Title Bar Blur** | Haze (Compose real-time frosted blur, Android 12+) |
 | **Database** | Room (favorites / search history / playback state / desktop lyrics settings / user profile) |
 | **Image Loading** | Coil (25% memory cache + 100MB disk cache) |
 | **Architecture** | MVVM + ViewModel + StateFlow |
@@ -271,7 +277,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## 📦 Download & Install
 
 ### Option 1: Download APK
-Go to the [Release](../../releases) page to download the latest `ShuYin-release-v1.5.0.apk` and install directly.
+Go to the [Release](../../releases) page to download the latest `ShuYin-release-v2.1.0.apk` and install directly.
 
 ### Option 2: Build from Source
 ```bash
@@ -342,6 +348,7 @@ See the [LICENSE](LICENSE) file or [GNU GPL-3.0 official site](https://www.gnu.o
 - Jetpack Compose / Media3 / Room / Coil: Apache License 2.0
 - HeHang0 ExoPlayer FLAC extension: Apache License 2.0
 - Kyant0 Backdrop liquid glass library (AndroidLiquidGlass): Apache License 2.0
+- Haze blur library (dev.chrisbanes.haze): Apache License 2.0
 - mp3agic: MIT License
 
 ## 💬 Communication & Feedback
@@ -361,6 +368,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 ## 🙏 Acknowledgments
 
 - [AndroidLiquidGlass (Backdrop)](https://github.com/Kyant0/AndroidLiquidGlass) - Liquid glass effects and jelly drag / press highlight interaction solution (by Kyant0)
+- [Haze](https://github.com/chrisbanes/haze) - Title bar scroll frosted blur effect (by Chris Banes)
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - Secondary page transition animation solution
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - Partial code reference
 - [HeHang0](https://github.com/HeHang0) - Precompiled ExoPlayer FLAC extension
@@ -371,7 +379,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 📊 Project Status
 
-- **Current Version**: v1.5.0
+- **Current Version**: v2.1.0
 - **Min Support**: Android 6.0 (API 23)
 - **Target Version**: Android 17 (API 37)
 ```
