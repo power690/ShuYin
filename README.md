@@ -1,6 +1,6 @@
 # 鼠音 ShuYin
 
-一款开源的 Android 本地音乐播放器，基于 Jetpack Compose 构建，支持 FLAC 无损解码、桌面歌词、悬浮歌词、液态玻璃导航栏与迷你播放卡片、40 种语言界面，采用 iOS 风格的页面转场动画。
+一款开源的 Android 本地音乐播放器，基于 Jetpack Compose 构建，支持 WebDav 云端挂载、FLAC 无损解码、桌面歌词、悬浮歌词、液态玻璃导航栏与迷你播放卡片、40 种语言界面，采用 iOS 风格的页面转场动画。
 
 ## ✨ 功能特性
 
@@ -36,6 +36,14 @@
 - **原生文件选择器**：集成系统文件选择器一键选目录
 - **路径持久化**：杀后台重开仍保留自定义路径
 - **中文路径支持**：完整支持中文路径的扫描和播放
+
+### ☁️ WebDav 挂载
+- **云端音乐挂载**：添加 WebDAV 账号（坚果云、Alist、Nextcloud 等），直接流式播放云端音乐，不占用本地存储
+- **多账号管理**：支持保存多个账号，添加后一键切换挂载
+- **在线歌词与封面**：远程读取 MP3 / FLAC 内嵌歌词与封面，无需下载整个文件
+- **元数据缓存**：歌曲信息本地缓存，二次打开秒级加载，文件无变化不重复扫描
+- **断网保护**：网络失联自动暂停播放并提示，避免无声空转
+- **缓冲优化**：网络缓慢时给出等待提示，长时间停滞自动处理
 
 ### ⭐ 收藏与个人
 - **歌曲收藏**：一键收藏喜欢的歌曲，独立收藏列表
@@ -83,7 +91,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v2.1.0.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v2.2.0.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
@@ -135,6 +143,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | 播放前台服务 |
 | `POST_NOTIFICATIONS` (Android 13+) | 通知栏控制 |
 | `SYSTEM_ALERT_WINDOW` | 悬浮歌词 |
+| `ACCESS_NETWORK_STATE` | 网络状态检测（WebDav 播放断网保护）|
 
 ## 📄 开源协议
 
@@ -186,7 +195,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 📊 项目状态
 
-- **当前版本**：v2.1.0
+- **当前版本**：v2.2.0
 - **最低支持**：Android 6.0 (API 23)
 - **目标版本**：Android 17 (API 37)
 
@@ -194,7 +203,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 # ShuYin (English)
 
-An open-source Android local music player built with Jetpack Compose, featuring FLAC lossless decoding, desktop floating lyrics, liquid glass navigation bar and mini player card, 40-language UI, and iOS-style page transition animations.
+An open-source Android local music player built with Jetpack Compose, featuring WebDAV cloud mounting, FLAC lossless decoding, desktop floating lyrics, liquid glass navigation bar and mini player card, 40-language UI, and iOS-style page transition animations.
 
 ## ✨ Features
 
@@ -230,6 +239,14 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 - **Native File Picker**: Integrated system file picker for one-tap directory selection
 - **Path Persistence**: Custom path retained after app restart
 - **Chinese Path Support**: Full support for Chinese path scanning and playback
+
+### ☁️ WebDAV Mount
+- **Cloud Music Mounting**: Add WebDAV accounts (Jianguoyun, Alist, Nextcloud, etc.) and stream cloud music directly without occupying local storage
+- **Multi-Account Management**: Save multiple accounts and switch mounts with one tap
+- **Online Lyrics & Cover Art**: Remotely reads embedded MP3 / FLAC lyrics and cover art without downloading whole files
+- **Metadata Cache**: Song info cached locally for instant loading on reopen; unchanged files are not re-scanned
+- **Network Loss Protection**: Auto-pauses playback with a notice when the network drops, avoiding silent idling
+- **Buffering Optimization**: Shows a waiting hint on slow networks; long stalls are handled automatically
 
 ### ⭐ Favorites & Profile
 - **Song Favorites**: One-tap favorite songs with independent favorites list
@@ -277,7 +294,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## 📦 Download & Install
 
 ### Option 1: Download APK
-Go to the [Release](../../releases) page to download the latest `ShuYin-release-v2.1.0.apk` and install directly.
+Go to the [Release](../../releases) page to download the latest `ShuYin-release-v2.2.0.apk` and install directly.
 
 ### Option 2: Build from Source
 ```bash
@@ -329,6 +346,7 @@ If you find translation errors or want to add a new language, PRs are welcome.
 | `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | Playback foreground service |
 | `POST_NOTIFICATIONS` (Android 13+) | Notification bar control |
 | `SYSTEM_ALERT_WINDOW` | Floating lyrics |
+| `ACCESS_NETWORK_STATE` | Network state detection (WebDAV playback network-loss protection) |
 
 ## 📄 License
 
@@ -379,7 +397,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 📊 Project Status
 
-- **Current Version**: v2.1.0
+- **Current Version**: v2.2.0
 - **Min Support**: Android 6.0 (API 23)
 - **Target Version**: Android 17 (API 37)
 ```
