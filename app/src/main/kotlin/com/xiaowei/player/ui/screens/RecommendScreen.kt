@@ -152,14 +152,6 @@ fun RecommendScreen(
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = Strings.get(greetingKey),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
             }
         },
         content = { topBarHeight ->
@@ -170,6 +162,17 @@ fun RecommendScreen(
                     .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
                 contentPadding = PaddingValues(top = topBarHeight, bottom = bottomPadding)
             ) {
+
+            item {
+                Text(
+                    text = Strings.get(greetingKey),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 16.dp, top = 2.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             item {
                 Text(

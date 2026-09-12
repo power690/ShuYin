@@ -213,6 +213,10 @@ class MainActivity : ComponentActivity() {
                             onAddSong = { song -> viewModel.addToQueue(song) },
                             onRefresh = {
 
+                                if (com.xiaowei.player.data.WebDavPrefs.get(this@MainActivity).activeAccount() != null) {
+                                    viewModel.refresh(true)
+                                    return@ShuYinApp
+                                }
                                 val customPath = com.xiaowei.player.data.CustomPathPrefs
                                     .get(this@MainActivity).path.trim()
                                 if (customPath.isNotBlank()) {
@@ -249,7 +253,8 @@ class MainActivity : ComponentActivity() {
                             onRemoveFavorites = viewModel::removeFavorites,
                             floatingLyricEnabled = floatingLyricEnabled,
                             onToggleFloatingLyric = { toggleFloatingLyric() },
-                            onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) }
+                            onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) },
+                            onWebDavChanged = { viewModel.refreshFromWebDav() }
                         )
 
                         UpdateCheckerHost(
@@ -340,6 +345,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkPermissionAndLoad() {
+        if (com.xiaowei.player.data.WebDavPrefs.get(this).activeAccount() != null) {
+            viewModel.onPermissionResult(true)
+            checkNotificationPermission()
+            return
+        }
         val perms = requiredPermissions()
         val allGranted = perms.all {
             ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED

@@ -39,6 +39,10 @@ object EmbeddedCoverFetcher {
         if (filePath.isNullOrBlank()) return null
         byteCache[filePath]?.let { return it }
 
+        if (filePath.startsWith("http://") || filePath.startsWith("https://")) {
+            return loadNetworkCoverBytes(filePath)
+        }
+
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return null
 
@@ -56,6 +60,35 @@ object EmbeddedCoverFetcher {
             }
         } catch (e: Exception) {
             Log.w(TAG, "extract bytes failed: $filePath - ${e.message}")
+            null
+        } catch (e: NoClassDefFoundError) {
+            null
+        }
+    }
+
+    private fun loadNetworkCoverBytes(url: String): ByteArray? {
+        if (hasKnownNoCover(url)) return null
+        return try {
+            val account = com.xiaowei.player.data.WebDavPrefs.get(
+                com.xiaowei.player.ShuYinApp.instance
+            ).activeAccount()
+            val mmr = MediaMetadataRetriever()
+            try {
+                val headers = account?.let { mapOf("Authorization" to it.authHeader()) } ?: emptyMap()
+                mmr.setDataSource(url, headers)
+                val data = mmr.embeddedPicture
+                if (data != null && data.isNotEmpty()) {
+                    byteCache.put(url, data)
+                    data
+                } else {
+                    markNoCover(url)
+                    null
+                }
+            } finally {
+                try { mmr.release() } catch (_: Throwable) {}
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "extract webdav cover failed: $url - ${e.message}")
             null
         } catch (e: NoClassDefFoundError) {
             null

@@ -49,6 +49,29 @@ object FlacLyricsParser {
         }
     }
 
+    fun readLyricsFromHead(head: ByteArray): String? {
+        if (head.size < 8) return null
+        if (head[0] != 0x66.toByte() || head[1] != 0x4C.toByte() ||
+            head[2] != 0x61.toByte() || head[3] != 0x43.toByte()
+        ) return null
+        var pos = 4
+        while (pos + 4 <= head.size) {
+            val headerByte = head[pos].toInt() and 0xFF
+            val blockType = headerByte and 0x7F
+            val len = ((head[pos + 1].toInt() and 0xFF) shl 16) or
+                      ((head[pos + 2].toInt() and 0xFF) shl 8) or
+                      (head[pos + 3].toInt() and 0xFF)
+            pos += 4
+            if (blockType == BLOCK_TYPE_VORBIS_COMMENT) {
+                if (pos + len > head.size) return null
+                return parseVorbisComment(head.copyOfRange(pos, pos + len))
+            }
+            pos += len
+            if ((headerByte and 0x80) != 0) return null
+        }
+        return null
+    }
+
     private fun parseVorbisComment(data: ByteArray): String? {
         var pos = 0
 

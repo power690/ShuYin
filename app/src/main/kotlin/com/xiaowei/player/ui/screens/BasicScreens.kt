@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -18,11 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.xiaowei.player.R
 import com.xiaowei.player.i18n.Strings
 
 @Composable
-fun LoadingScreen() {
+fun LoadingScreen(message: String = Strings.get("loading_music")) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -31,7 +29,7 @@ fun LoadingScreen() {
             CircularProgressIndicator()
             Spacer(Modifier.height(16.dp))
             Text(
-                text = Strings.get("loading_music"),
+                text = message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -73,7 +71,9 @@ fun NoPermissionScreen(onRequest: () -> Unit) {
 @Composable
 fun EmptyScanScreen(
     onRescan: () -> Unit,
-    buttonText: String = Strings.get("rescan")
+    buttonText: String = Strings.get("rescan"),
+    titleText: String = Strings.get("empty_songs"),
+    messageText: String = Strings.get("empty_library")
 ) {
     Box(
         modifier = Modifier.fillMaxSize().statusBarsPadding().padding(24.dp),
@@ -84,14 +84,14 @@ fun EmptyScanScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Text(
-                text = Strings.get("empty_songs"),
+                text = titleText,
                 style = MaterialTheme.typography.headlineMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(12.dp))
             Text(
-                text = Strings.get("empty_library"),
+                text = messageText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

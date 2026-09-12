@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -102,6 +103,7 @@ import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
 import com.xiaowei.player.ui.components.formatDuration
 import com.xiaowei.player.ui.shapes.MaterialStarShape
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.ContentScale
@@ -109,6 +111,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.Density
@@ -327,6 +330,7 @@ fun PlayerScreen(
                                 positionMs = playerState.positionMs,
                                 positionUpdateNanos = playerState.positionUpdateNanos,
                                 isPlaying = playerState.isPlaying,
+                                isBuffering = playerState.isBuffering,
                                 onToggle = { showLyrics = !showLyrics },
                                 onSeek = onSeek,
                                 listState = lyricsListState,
@@ -667,6 +671,7 @@ private fun LyricsView(
     positionMs: Long,
     positionUpdateNanos: Long,
     isPlaying: Boolean,
+    isBuffering: Boolean,
     onToggle: () -> Unit,
     onSeek: (Long) -> Unit,
     listState: LazyListState,
@@ -685,9 +690,10 @@ private fun LyricsView(
         initialValue = positionMs,
         positionMs,
         positionUpdateNanos,
-        isPlaying
+        isPlaying,
+        isBuffering
     ) {
-        if (!isPlaying || positionUpdateNanos == 0L) {
+        if (!isPlaying || isBuffering || positionUpdateNanos == 0L) {
             value = positionMs
             return@produceState
         }
@@ -1027,23 +1033,56 @@ private fun PlayerCover(
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    var coverBytes by remember(filePath) {
+    var shownBytes by remember {
         mutableStateOf(com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedBytesSync(filePath))
     }
+    var incomingBytes by remember { mutableStateOf<ByteArray?>(null) }
+    var incomingReady by remember { mutableStateOf(false) }
+    val fade = remember { Animatable(0f) }
 
-    if (coverBytes == null && !filePath.isNullOrBlank()) {
-        LaunchedEffect(filePath) {
-            val bytes = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(filePath)
-            }
-            coverBytes = bytes
+    LaunchedEffect(filePath) {
+        if (filePath.isNullOrBlank()) return@LaunchedEffect
+        val cached = com.xiaowei.player.data.EmbeddedCoverFetcher.getCachedBytesSync(filePath)
+        val bytes = cached ?: kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            com.xiaowei.player.data.EmbeddedCoverFetcher.loadCoverBytes(filePath)
         }
+        if (bytes == null) {
+            shownBytes = null
+            return@LaunchedEffect
+        }
+        if (shownBytes == null || bytes === shownBytes) {
+            shownBytes = bytes
+            return@LaunchedEffect
+        }
+        incomingReady = false
+        incomingBytes = bytes
     }
 
-    val imageRequest = remember(coverBytes) {
-        if (coverBytes != null && !filePath.isNullOrBlank()) {
+    LaunchedEffect(incomingBytes) {
+        val bytes = incomingBytes ?: return@LaunchedEffect
+        androidx.compose.runtime.snapshotFlow { incomingReady }.first { it }
+        fade.snapTo(0f)
+        fade.animateTo(1f, tween(450, easing = FastOutSlowInEasing))
+        shownBytes = bytes
+        incomingBytes = null
+        incomingReady = false
+        fade.snapTo(0f)
+    }
+
+    val shownRequest = remember(shownBytes) {
+        if (shownBytes != null) {
             coil.request.ImageRequest.Builder(context)
-                .data(coverBytes)
+                .data(shownBytes)
+                .size(1200)
+                .memoryCacheKey("full\u0000$filePath")
+                .build()
+        } else null
+    }
+
+    val incomingRequest = remember(incomingBytes) {
+        if (incomingBytes != null) {
+            coil.request.ImageRequest.Builder(context)
+                .data(incomingBytes)
                 .size(1200)
                 .memoryCacheKey("full\u0000$filePath")
                 .build()
@@ -1061,9 +1100,9 @@ private fun PlayerCover(
         ),
         contentAlignment = Alignment.Center
     ) {
-        if (imageRequest != null) {
+        if (shownRequest != null) {
             AsyncImage(
-                model = imageRequest,
+                model = shownRequest,
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -1075,6 +1114,18 @@ private fun PlayerCover(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.size(96.dp)
+            )
+        }
+        if (incomingRequest != null) {
+            AsyncImage(
+                model = incomingRequest,
+                contentDescription = null,
+                onSuccess = { incomingReady = true },
+                onError = { incomingBytes = null },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = fade.value },
+                contentScale = ContentScale.Crop
             )
         }
     }

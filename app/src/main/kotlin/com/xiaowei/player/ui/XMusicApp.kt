@@ -79,6 +79,8 @@ import com.xiaowei.player.ui.screens.SearchScreen
 import com.xiaowei.player.ui.screens.SettingsScreen
 import com.xiaowei.player.ui.screens.SponsorScreen
 import com.xiaowei.player.ui.screens.MaterialSettingsScreen
+import com.xiaowei.player.ui.screens.WebDavScreen
+import com.xiaowei.player.data.WebDavClient
 import kotlinx.coroutines.launch
 import kotlin.math.pow
 
@@ -101,6 +103,7 @@ sealed class Detail {
     object MaterialSettings : Detail()
     object PlayerStyle : Detail()
     object Sponsor : Detail()
+    object WebDav : Detail()
     object None : Detail()
 }
 
@@ -125,7 +128,8 @@ fun ShuYinApp(
     onRemoveFavorites: (List<Long>) -> Unit = {},
     floatingLyricEnabled: Boolean = false,
     onToggleFloatingLyric: () -> Unit = {},
-    onCustomPathConfirm: (String) -> Unit = {}
+    onCustomPathConfirm: (String) -> Unit = {},
+    onWebDavChanged: (Boolean) -> Unit = {}
 ) {
     var currentTab by rememberSaveable { mutableStateOf(Tab.Recommend.name) }
 
@@ -239,10 +243,36 @@ fun ShuYinApp(
         } else false
     }
 
-    val emptyScanButtonText = if (hasCustomPath && !hasManagePerm) {
+    val emptyScanButtonText = if (library.webDavActive) {
+        Strings.get("rescan")
+    } else if (hasCustomPath && !hasManagePerm) {
         Strings.get("grant_permission")
     } else {
         Strings.get("rescan")
+    }
+
+    val webDavEmptyTitle = if (library.webDavActive) {
+        when (library.webDavErrorKey) {
+            WebDavClient.ERROR_AUTH -> Strings.get("webdav_error_auth")
+            WebDavClient.ERROR_NETWORK -> Strings.get("webdav_error_network")
+            WebDavClient.ERROR_PATH -> Strings.get("webdav_error_path")
+            WebDavClient.ERROR_UNKNOWN -> Strings.get("webdav_error_unknown")
+            else -> Strings.get("webdav_no_songs")
+        }
+    } else {
+        Strings.get("empty_songs")
+    }
+
+    val webDavEmptyMessage = if (library.webDavActive) {
+        Strings.get("webdav_empty_hint")
+    } else {
+        Strings.get("empty_library")
+    }
+
+    val loadingMusicText = if (library.webDavActive) {
+        Strings.get("webdav_loading_music")
+    } else {
+        Strings.get("loading_music")
     }
 
     var backPressedOnce by rememberSaveable { mutableStateOf(false) }
@@ -421,8 +451,8 @@ fun ShuYinApp(
                                 val tab = tabs[page]
                                 when (tab) {
                                     Tab.Recommend -> {
-                                        if (library.isLoading) LoadingScreen()
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        if (library.isLoading) LoadingScreen(message = loadingMusicText)
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else RecommendScreen(
                                             library = library,
                                             playerState = playerState,
@@ -438,8 +468,8 @@ fun ShuYinApp(
                                         )
                                     }
                                     Tab.Library -> {
-                                        if (library.isLoading) LoadingScreen()
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        if (library.isLoading) LoadingScreen(message = loadingMusicText)
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else LibraryScreen(
                                             library = library,
                                             playerState = playerState,
@@ -455,8 +485,8 @@ fun ShuYinApp(
                                         )
                                     }
                                     Tab.Search -> {
-                                        if (library.isLoading) LoadingScreen()
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText)
+                                        if (library.isLoading) LoadingScreen(message = loadingMusicText)
+                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else SearchScreen(
                                             library = library,
                                             playerState = playerState,
@@ -635,7 +665,12 @@ fun ShuYinApp(
                                     },
                                     onOpenMaterialSettings = { requestDetail(Detail.MaterialSettings) },
                                     onOpenPlayerStyle = { requestDetail(Detail.PlayerStyle) },
-                                    onOpenSponsor = { requestDetail(Detail.Sponsor) }
+                                    onOpenSponsor = { requestDetail(Detail.Sponsor) },
+                                    onOpenWebDav = { requestDetail(Detail.WebDav) }
+                                )
+                                Detail.WebDav -> WebDavScreen(
+                                    onBack = { popDetail() },
+                                    onWebDavChanged = onWebDavChanged
                                 )
                                 Detail.MaterialSettings -> MaterialSettingsScreen(
                                     onBack = { popDetail() }

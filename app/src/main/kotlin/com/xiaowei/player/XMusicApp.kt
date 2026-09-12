@@ -11,6 +11,8 @@ import com.xiaowei.player.data.EmbeddedCoverFetcher
 import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.PlaybackPrefs
+import com.xiaowei.player.data.WebDavMusicSource
+import com.xiaowei.player.data.WebDavPrefs
 import com.xiaowei.player.data.db.AppDatabase
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.i18n.Strings
@@ -27,6 +29,7 @@ class ShuYinApp : Application(), ImageLoaderFactory {
         private set
 
     private val musicRepository by lazy { MusicRepository(this) }
+    private val webDavMusicSource by lazy { WebDavMusicSource(this) }
 
     var onNotificationToggleFavorite: ((Long) -> Unit)? = null
 
@@ -40,7 +43,14 @@ class ShuYinApp : Application(), ImageLoaderFactory {
         playerManager = MusicPlayerManager(
             context = this,
             playbackPrefs = playbackPrefs,
-            lyricsLoader = { song -> musicRepository.reloadLyrics(song) }
+            lyricsLoader = { song ->
+                if (song.source == "webdav") {
+                    val account = WebDavPrefs.get(this).activeAccount()
+                    if (account != null) webDavMusicSource.fetchLyricsFor(account, song) else null
+                } else {
+                    musicRepository.reloadLyrics(song)
+                }
+            }
         )
         createNotificationChannel()
         purgeCoverCaches()

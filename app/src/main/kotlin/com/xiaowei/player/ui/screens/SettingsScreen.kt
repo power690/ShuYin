@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Album
+import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
@@ -88,6 +89,7 @@ import com.xiaowei.player.data.CustomPathPrefs
 import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
+import com.xiaowei.player.data.WebDavPrefs
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.ui.components.BlurTopBarLayout
 import com.xiaowei.player.ui.components.M3ExpressiveSwitch
@@ -312,7 +314,8 @@ fun SettingsScreen(
     onToggleMixWithOthers: (Boolean) -> Unit = {},
     onOpenMaterialSettings: () -> Unit = {},
     onOpenPlayerStyle: () -> Unit = {},
-    onOpenSponsor: () -> Unit = {}
+    onOpenSponsor: () -> Unit = {},
+    onOpenWebDav: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
@@ -320,6 +323,8 @@ fun SettingsScreen(
     val darkModePrefs = remember { DarkModePrefs.get(context) }
     val customPathPrefs = remember { CustomPathPrefs.get(context) }
     val audioMixPrefs = remember { AudioMixPrefs.get(context) }
+    val webDavPrefs = remember { WebDavPrefs.get(context) }
+    val webDavActive = webDavPrefs.activeIdState.value != null
 
     val dynamicColorEnabled = themePrefs.dynamicColorEnabledState.value
     val coverColorEnabled = themePrefs.coverColorEnabledState.value
@@ -561,7 +566,15 @@ fun SettingsScreen(
                 icon = Icons.Outlined.Folder,
                 tone = SettingIconTone.TERTIARY,
                 title = Strings.get("settings_custom_path"),
-                onClick = { onCustomPathClick() }
+                itemEnabled = !webDavActive,
+                onClick = { if (!webDavActive) onCustomPathClick() }
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.Cloud,
+                tone = SettingIconTone.SECONDARY,
+                title = Strings.get("settings_webdav"),
+                onClick = { onOpenWebDav() }
             )
 
             ExpressiveSettingItem(

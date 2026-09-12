@@ -371,6 +371,7 @@ fun ClassicPlayerScreen(
                                 positionMs = playerState.positionMs,
                                 positionUpdateNanos = playerState.positionUpdateNanos,
                                 isPlaying = playerState.isPlaying,
+                                isBuffering = playerState.isBuffering,
                                 onToggle = { showLyrics = !showLyrics },
                                 onSeek = onSeek,
                                 listState = lyricsListState,
@@ -754,6 +755,7 @@ private fun ClassicLyricsView(
     positionMs: Long,
     positionUpdateNanos: Long,
     isPlaying: Boolean,
+    isBuffering: Boolean,
     onToggle: () -> Unit,
     onSeek: (Long) -> Unit,
     listState: LazyListState,
@@ -772,9 +774,10 @@ private fun ClassicLyricsView(
         initialValue = positionMs,
         positionMs,
         positionUpdateNanos,
-        isPlaying
+        isPlaying,
+        isBuffering
     ) {
-        if (!isPlaying || positionUpdateNanos == 0L) {
+        if (!isPlaying || isBuffering || positionUpdateNanos == 0L) {
             value = positionMs
             return@produceState
         }
@@ -908,7 +911,7 @@ private fun ClassicLyricsView(
 
                 val lineLivePositionMs = if (isCurrent && line.isWordByWord && isPlaying) livePositionMs else positionMs
                 val useKaraoke = isCurrent && line.isWordByWord && !isBlank
-                val baseSize = if (isCurrent) 18f else 16f
+                val baseSize = if (isCurrent) 20f else 17f
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
 
@@ -958,7 +961,7 @@ private fun ClassicKaraokeLineAndroidView(
         val baseStyle = TextStyle(
             fontSize = fontSize.sp,
             fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Left
         )
         val annotatedText = remember(text) { AnnotatedString(text) }
         val layoutResult = remember(text, fontSize, isBold, maxWidthPx) {
@@ -970,7 +973,6 @@ private fun ClassicKaraokeLineAndroidView(
                 constraints = Constraints(maxWidth = maxWidthPx)
             )
         }
-        val layoutWidthPx = layoutResult.size.width
         val layoutHeightPx = layoutResult.size.height.coerceAtLeast(1)
         val layoutHeightDp = with(density) { layoutHeightPx.toDp() }
 
@@ -979,13 +981,13 @@ private fun ClassicKaraokeLineAndroidView(
                 .fillMaxWidth()
                 .height(layoutHeightDp)
         ) {
-            val centerOffsetX = ((size.width - layoutWidthPx) / 2f).coerceAtLeast(0f)
+            val textOffsetX = 8.dp.toPx()
 
             if (words == null || words.isEmpty()) {
                 drawText(
                     textLayoutResult = layoutResult,
                     color = dimColor,
-                    topLeft = Offset(centerOffsetX, 0f)
+                    topLeft = Offset(textOffsetX, 0f)
                 )
                 return@Canvas
             }
@@ -1019,9 +1021,9 @@ private fun ClassicKaraokeLineAndroidView(
                     val right = kotlin.math.max(firstBox.right, lastBox.right)
                     segments.add(
                         Rect(
-                            centerOffsetX + left,
+                            textOffsetX + left,
                             layoutResult.getLineTop(startLine),
-                            centerOffsetX + right,
+                            textOffsetX + right,
                             layoutResult.getLineBottom(startLine)
                         )
                     )
@@ -1039,9 +1041,9 @@ private fun ClassicKaraokeLineAndroidView(
                         }
                         segments.add(
                             Rect(
-                                centerOffsetX + kotlin.math.min(lineLeft, lineRight),
+                                textOffsetX + kotlin.math.min(lineLeft, lineRight),
                                 layoutResult.getLineTop(line),
-                                centerOffsetX + kotlin.math.max(lineLeft, lineRight),
+                                textOffsetX + kotlin.math.max(lineLeft, lineRight),
                                 layoutResult.getLineBottom(line)
                             )
                         )
@@ -1058,7 +1060,7 @@ private fun ClassicKaraokeLineAndroidView(
                                 drawText(
                                     textLayoutResult = layoutResult,
                                     color = sungColor,
-                                    topLeft = Offset(centerOffsetX, 0f)
+                                    topLeft = Offset(textOffsetX, 0f)
                                 )
                             }
                         }
@@ -1069,7 +1071,7 @@ private fun ClassicKaraokeLineAndroidView(
                                 drawText(
                                     textLayoutResult = layoutResult,
                                     color = unsungColor,
-                                    topLeft = Offset(centerOffsetX, 0f)
+                                    topLeft = Offset(textOffsetX, 0f)
                                 )
                             }
                         }
@@ -1088,14 +1090,14 @@ private fun ClassicKaraokeLineAndroidView(
                                     drawText(
                                         textLayoutResult = layoutResult,
                                         color = sungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
+                                        topLeft = Offset(textOffsetX, 0f)
                                     )
                                 }
                                 clipRect(splitX, seg.top, seg.right, seg.bottom) {
                                     drawText(
                                         textLayoutResult = layoutResult,
                                         color = unsungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
+                                        topLeft = Offset(textOffsetX, 0f)
                                     )
                                 }
                             } else {
@@ -1103,7 +1105,7 @@ private fun ClassicKaraokeLineAndroidView(
                                     drawText(
                                         textLayoutResult = layoutResult,
                                         color = sungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
+                                        topLeft = Offset(textOffsetX, 0f)
                                     )
                                 }
                             }

@@ -4,6 +4,8 @@ import android.content.ComponentName
 import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.support.v4.media.session.MediaSessionCompat
@@ -12,10 +14,15 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.xiaowei.player.data.AudioMixPrefs
 import com.xiaowei.player.data.PlaybackPrefs
 import com.xiaowei.player.data.Song
+import com.xiaowei.player.data.WebDavPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -40,11 +47,12 @@ class MusicPlayerManager(
     
     private fun tryReloadLyricsIfNeeded(song: Song) {
         
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        if (song.source != "webdav") {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+            if (!android.os.Environment.isExternalStorageManager()) return
+        }
         
         if (song.hasLyrics) return
-        
-        if (!android.os.Environment.isExternalStorageManager()) return
         
         val loader = lyricsLoader ?: return
 
@@ -84,7 +92,22 @@ class MusicPlayerManager(
             .setUsage(C.USAGE_MEDIA)
             .build()
 
+        val dataSourceFactory = DataSource.Factory {
+            val httpFactory = DefaultHttpDataSource.Factory()
+                .setConnectTimeoutMs(15_000)
+                .setReadTimeoutMs(30_000)
+                .setAllowCrossProtocolRedirects(true)
+            val headers = HashMap<String, String>()
+            val account = WebDavPrefs.get(context).activeAccount()
+            account?.let {
+                headers["Authorization"] = it.authHeader()
+            }
+            httpFactory.setDefaultRequestProperties(headers)
+            DefaultDataSource(context, httpFactory.createDataSource())
+        }
+
         ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .setAudioAttributes(
                 mediaAudioAttributes,
                 !AudioMixPrefs.get(context).mixWithOthers
@@ -94,6 +117,14 @@ class MusicPlayerManager(
             addListener(object : Player.Listener {
                 override fun onPlaybackStateChanged(playbackState: Int) {
                     _state.update { it.copy(isBuffering = playbackState == Player.STATE_BUFFERING) }
+                    if (playbackState == Player.STATE_BUFFERING) {
+                        scheduleBufferingSlowHint()
+                        scheduleNetworkStallWatch()
+                    } else {
+                        cancelBufferingSlowHint()
+                        cancelNetworkStallWatch()
+                        if (playbackState == Player.STATE_READY) pausedByNetwork = false
+                    }
                     if (playbackState == Player.STATE_ENDED) {
 
                         autoAdvanceToNext()
@@ -119,6 +150,7 @@ class MusicPlayerManager(
 
                     
                     playlist.getOrNull(idx)?.let { tryReloadLyricsIfNeeded(it) }
+                    scheduleNetworkStallWatch()
                 }
             })
         }
@@ -152,6 +184,89 @@ class MusicPlayerManager(
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
     private var tickerJob: Job? = null
+
+    private var bufferingHintJob: Job? = null
+    private var bufferingHintShown = false
+    private var networkStallJob: Job? = null
+    private var pausedByNetwork = false
+    private var stallSeconds = 0
+    private var lastStallPositionMs = 0L
+
+    private fun scheduleBufferingSlowHint() {
+        val song = _state.value.currentSong ?: return
+        if (song.source != "webdav") return
+        if (bufferingHintShown) return
+        cancelBufferingSlowHint()
+        bufferingHintJob = scope.launch {
+            delay(8000)
+            if (player.playbackState == Player.STATE_BUFFERING &&
+                player.playWhenReady &&
+                !bufferingHintShown &&
+                networkStallThresholdMs() == null &&
+                _state.value.currentSong?.id == song.id
+            ) {
+                bufferingHintShown = true
+                android.widget.Toast.makeText(
+                    context,
+                    com.xiaowei.player.i18n.Strings.get("webdav_buffer_slow"),
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    private fun cancelBufferingSlowHint() {
+        bufferingHintJob?.cancel()
+        bufferingHintJob = null
+    }
+
+    private fun scheduleNetworkStallWatch() {
+        val song = _state.value.currentSong
+        if (song == null || song.source != "webdav") return
+        cancelNetworkStallWatch()
+        lastStallPositionMs = player.currentPosition
+        networkStallJob = scope.launch {
+            while (true) {
+                delay(1000)
+                if (player.playbackState != Player.STATE_BUFFERING) break
+                val posNow = player.currentPosition
+                val advancing = posNow != lastStallPositionMs
+                lastStallPositionMs = posNow
+                if (!advancing && player.playWhenReady) {
+                    stallSeconds++
+                    val thresholdMs = networkStallThresholdMs()
+                    if (thresholdMs != null && stallSeconds * 1000L >= thresholdMs) {
+                        pausedByNetwork = true
+                        stallSeconds = 0
+                        player.pause()
+                        android.widget.Toast.makeText(
+                            context,
+                            com.xiaowei.player.i18n.Strings.get("network_not_connected"),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                } else {
+                    stallSeconds = 0
+                }
+            }
+        }
+    }
+
+    private fun cancelNetworkStallWatch() {
+        networkStallJob?.cancel()
+        networkStallJob = null
+        stallSeconds = 0
+    }
+
+    private fun networkStallThresholdMs(): Long? {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return null
+        val network = cm.activeNetwork ?: return if (pausedByNetwork) 10_000L else 30_000L
+        val caps = cm.getNetworkCapabilities(network)
+        if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
+            return if (pausedByNetwork) 10_000L else 30_000L
+        }
+        return if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) null else 10_000L
+    }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
@@ -430,6 +545,7 @@ class MusicPlayerManager(
             savePlaybackStateSnapshot(positionMs = player.currentPosition)
         }
         tickerJob?.cancel()
+        cancelNetworkStallWatch()
         player.release()
         mediaSession.release()
     }
@@ -531,6 +647,9 @@ class MusicPlayerManager(
             .build()
 
         val playUri = when (source) {
+            "webdav" -> {
+                Uri.parse(data)
+            }
             "custom_path" -> {
 
                 try {

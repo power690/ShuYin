@@ -10,6 +10,8 @@ import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.RecommendCard
 import com.xiaowei.player.data.Song
+import com.xiaowei.player.data.WebDavMusicSource
+import com.xiaowei.player.data.WebDavPrefs
 import com.xiaowei.player.player.MusicPlayerManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +33,10 @@ data class LibraryState(
 
     val favoriteVersion: Int = 0,
 
-    val artistSongMap: Map<String, List<Song>> = emptyMap()
+    val artistSongMap: Map<String, List<Song>> = emptyMap(),
+
+    val webDavActive: Boolean = false,
+    val webDavErrorKey: String = ""
 ) {
     val filteredSongs: List<Song>
         get() {
@@ -60,6 +65,7 @@ data class LibraryState(
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repo = MusicRepository(app)
+    private val webDavSource = WebDavMusicSource(app)
     private val favoriteRepo = (app as ShuYinApp).favoriteRepo
     val playerManager: MusicPlayerManager = (app as ShuYinApp).playerManager
 
@@ -82,16 +88,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (granted) refresh()
     }
 
-    fun refresh() {
+    fun refresh(forceRescan: Boolean = false) {
         viewModelScope.launch {
             _library.value = _library.value.copy(isLoading = true)
 
-            val customPath = CustomPathPrefs.get(getApplication()).path.trim()
+            val webDavAccount = WebDavPrefs.get(getApplication()).activeAccount()
+            var webDavError = ""
             val songs = withTimeoutOrNull(600_000L) {
-                if (customPath.isNotBlank()) {
-                    repo.loadMusicFromPath(customPath)
+                if (webDavAccount != null) {
+                    val result = webDavSource.loadSongs(webDavAccount, forceRescan)
+                    webDavError = result.errorKey
+                    result.songs
                 } else {
-                    repo.loadAllMusic()
+                    val customPath = CustomPathPrefs.get(getApplication()).path.trim()
+                    if (customPath.isNotBlank()) {
+                        repo.loadMusicFromPath(customPath)
+                    } else {
+                        repo.loadAllMusic()
+                    }
                 }
             } ?: emptyList()
             val (artists, artistSongMap) = repo.buildArtists(songs)
@@ -105,7 +119,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 artists = artists,
                 albums = albums,
                 recommends = recommends,
-                artistSongMap = artistSongMap
+                artistSongMap = artistSongMap,
+                webDavActive = webDavAccount != null,
+                webDavErrorKey = webDavError
             )
 
             if (!hasRestoredPlayback) {
@@ -132,6 +148,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             CustomPathPrefs.get(getApplication()).path = path.trim()
 
             refresh()
+        }
+    }
+
+    fun refreshFromWebDav() {
+        viewModelScope.launch {
+
+            if (playerManager.playlist.isNotEmpty()) {
+                playerManager.clearQueue()
+            }
+
+            refresh(true)
         }
     }
 
