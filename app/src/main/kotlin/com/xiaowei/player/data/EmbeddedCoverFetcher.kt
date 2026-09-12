@@ -6,6 +6,10 @@ import android.util.LruCache
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.Callable
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 object EmbeddedCoverFetcher {
 
@@ -18,6 +22,10 @@ object EmbeddedCoverFetcher {
     }
 
     private val negativeCache = HashSet<String>()
+
+    private val networkCoverExecutor: ExecutorService = Executors.newFixedThreadPool(4) { r ->
+        Thread(r).apply { isDaemon = true }
+    }
 
     fun purgeLegacyDiskCache(context: android.content.Context) {
         try {
@@ -72,11 +80,18 @@ object EmbeddedCoverFetcher {
             val account = com.xiaowei.player.data.WebDavPrefs.get(
                 com.xiaowei.player.ShuYinApp.instance
             ).activeAccount()
-            val mmr = MediaMetadataRetriever()
+            val future = networkCoverExecutor.submit(Callable {
+                val mmr = MediaMetadataRetriever()
+                try {
+                    val headers = account?.let { mapOf("Authorization" to it.authHeader()) } ?: emptyMap()
+                    mmr.setDataSource(url, headers)
+                    mmr.embeddedPicture
+                } finally {
+                    try { mmr.release() } catch (_: Throwable) {}
+                }
+            })
             try {
-                val headers = account?.let { mapOf("Authorization" to it.authHeader()) } ?: emptyMap()
-                mmr.setDataSource(url, headers)
-                val data = mmr.embeddedPicture
+                val data = future.get(20, TimeUnit.SECONDS)
                 if (data != null && data.isNotEmpty()) {
                     byteCache.put(url, data)
                     data
@@ -84,13 +99,11 @@ object EmbeddedCoverFetcher {
                     markNoCover(url)
                     null
                 }
-            } finally {
-                try { mmr.release() } catch (_: Throwable) {}
+            } catch (_: Throwable) {
+                future.cancel(true)
+                null
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "extract webdav cover failed: $url - ${e.message}")
-            null
-        } catch (e: NoClassDefFoundError) {
+        } catch (_: Throwable) {
             null
         }
     }

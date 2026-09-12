@@ -130,9 +130,27 @@ class MusicPlayerManager(
                         autoAdvanceToNext()
                     }
                 }
+                override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                    _state.update { it.copy(isPlaying = playWhenReady) }
+                }
                 override fun onIsPlayingChanged(isPlaying: Boolean) {
 
                     _state.update { it.copy(isPlaying = player.playWhenReady) }
+                }
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    pausedByNetwork = false
+                    cancelNetworkStallWatch()
+                    cancelBufferingSlowHint()
+                    if (player.playWhenReady) player.pause()
+                    _state.update { it.copy(isPlaying = false, isBuffering = false) }
+                    val song = _state.value.currentSong
+                    if (song?.source == "webdav") {
+                        android.widget.Toast.makeText(
+                            context,
+                            com.xiaowei.player.i18n.Strings.get("webdav_error_network"),
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                     val idx = currentMediaItemIndex
@@ -202,7 +220,6 @@ class MusicPlayerManager(
             if (player.playbackState == Player.STATE_BUFFERING &&
                 player.playWhenReady &&
                 !bufferingHintShown &&
-                networkStallThresholdMs() == null &&
                 _state.value.currentSong?.id == song.id
             ) {
                 bufferingHintShown = true
@@ -239,6 +256,7 @@ class MusicPlayerManager(
                         pausedByNetwork = true
                         stallSeconds = 0
                         player.pause()
+                        _state.update { it.copy(isPlaying = false) }
                         android.widget.Toast.makeText(
                             context,
                             com.xiaowei.player.i18n.Strings.get("network_not_connected"),
@@ -265,7 +283,7 @@ class MusicPlayerManager(
         if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
             return if (pausedByNetwork) 10_000L else 30_000L
         }
-        return if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) null else 10_000L
+        return if (caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 30_000L else 10_000L
     }
 
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
@@ -411,6 +429,7 @@ class MusicPlayerManager(
     fun clearQueue() {
         player.clearMediaItems()
         player.stop()
+        player.playWhenReady = false
         playlist = emptyList()
         _state.update { it.copy(currentSong = null, currentIndex = -1, isPlaying = false) }
         playbackPrefs?.clearSync()
@@ -420,9 +439,11 @@ class MusicPlayerManager(
 
         if (player.playWhenReady) {
             player.pause()
+            _state.update { it.copy(isPlaying = false) }
         } else {
             if (player.playbackState == Player.STATE_IDLE) player.prepare()
             player.play()
+            _state.update { it.copy(isPlaying = true) }
         }
     }
 

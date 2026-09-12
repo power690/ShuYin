@@ -76,7 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
 
-        _library.value = _library.value.copy(favoriteIds = favoriteRepo.getFavoriteIdsSync())
+        _library.value = _library.value.copy(favoriteIds = favoriteRepo.getFavoriteIdsSync(), webDavActive = WebDavPrefs.get(app).activeAccount() != null)
 
         (app as ShuYinApp).onNotificationToggleFavorite = { songId ->
             toggleFavorite(songId)
@@ -90,9 +90,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh(forceRescan: Boolean = false) {
         viewModelScope.launch {
-            _library.value = _library.value.copy(isLoading = true)
-
             val webDavAccount = WebDavPrefs.get(getApplication()).activeAccount()
+            _library.value = _library.value.copy(isLoading = true, webDavActive = webDavAccount != null)
+
             var webDavError = ""
             val songs = withTimeoutOrNull(600_000L) {
                 if (webDavAccount != null) {
