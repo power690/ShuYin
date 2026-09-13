@@ -278,7 +278,7 @@ private fun SongsPane(
         }
         items(
             items = sortedSongs,
-            key = { it.id },
+            key = { song -> song.id.toString() + "_" + song.data },
             contentType = { "song_row" }
         ) { song ->
             SongRow(
@@ -330,7 +330,7 @@ private fun ArtistsPane(
     ) {
         items(
             items = artists,
-            key = { it.id },
+            key = { artist -> artist.id.toString() + "_" + artist.displayName },
             contentType = { "artist_tile" }
         ) { artist ->
             LibraryArtistTile(
@@ -376,7 +376,7 @@ private fun AlbumsPane(
     ) {
         items(
             items = albums,
-            key = { it.id },
+            key = { album -> album.id.toString() + "_" + album.displayName },
             contentType = { "album_tile" }
         ) { album ->
             LibraryAlbumTile(

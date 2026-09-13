@@ -199,7 +199,7 @@ fun ArtistDetailScreen(
                 }
             }
 
-            items(sortedSongs, key = { it.id }) { song ->
+            items(sortedSongs, key = { song -> song.id.toString() + "_" + song.data }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
@@ -306,7 +306,7 @@ fun AlbumDetailScreen(
                 }
             }
 
-            items(sortedSongs, key = { it.id }) { song ->
+            items(sortedSongs, key = { song -> song.id.toString() + "_" + song.data }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,

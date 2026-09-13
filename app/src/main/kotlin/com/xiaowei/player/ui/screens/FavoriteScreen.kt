@@ -207,7 +207,7 @@ fun FavoriteScreen(
                         }
                     }
                 }
-                items(sortedSongs, key = { it.id }) { song ->
+                items(sortedSongs, key = { song -> song.id.toString() + "_" + song.data }) { song ->
                     val isSelected = selectedIds.contains(song.id)
                     FavoriteSongRow(
                         song = song,

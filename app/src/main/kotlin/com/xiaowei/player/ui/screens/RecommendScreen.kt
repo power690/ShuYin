@@ -233,7 +233,7 @@ fun RecommendScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(library.hotAlbums, key = { it.id }) { album ->
+                    items(library.hotAlbums, key = { album -> album.id.toString() + "_" + album.displayName }) { album ->
                         AlbumTile(
                             album = album,
                             onClick = { onOpenAlbum(album.id) }
@@ -259,7 +259,7 @@ fun RecommendScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(library.hotArtists, key = { it.id }) { artist ->
+                    items(library.hotArtists, key = { artist -> artist.id.toString() + "_" + artist.displayName }) { artist ->
                         ArtistTile(
                             artist = artist,
                             onClick = { onOpenArtist(artist.displayName) }
@@ -559,7 +559,7 @@ fun RecommendDetailScreen(
                 }
             }
         } else {
-            items(sortedSongs, key = { it.id }) { song ->
+            items(sortedSongs, key = { song -> song.id.toString() + "_" + song.data }) { song ->
                 SongRow(
                     song = song,
                     isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
@@ -852,7 +852,7 @@ fun SearchScreen(
                         )
                     }
                 }
-                items(sortedResults, key = { it.id }) { song ->
+                items(sortedResults, key = { song -> song.id.toString() + "_" + song.data }) { song ->
                     SongRow(
                         song = song,
                         isPlaying = playerState.isPlaying && playerState.currentSong?.id == song.id,
