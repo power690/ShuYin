@@ -31,6 +31,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -88,7 +89,8 @@ fun LiquidGlassNavBar(
     selectedTabIndex: () -> Int,
     onTabSelected: (Int) -> Unit,
     modifier: Modifier = Modifier,
-    forceFrosted: Boolean = false
+    forceFrosted: Boolean = false,
+    onTabReselected: (Int) -> Unit = {}
 ) {
     val barShape = RoundedCornerShape(30.dp)
     val pillShape = RoundedCornerShape(26.dp)
@@ -141,7 +143,9 @@ fun LiquidGlassNavBar(
             visibilityThreshold = Offset.VisibilityThreshold
         )
         var currentIndex by remember { mutableIntStateOf(selectedTabIndex()) }
+        val currentOnTabReselected by rememberUpdatedState(onTabReselected)
         val dampedDragAnimation = remember(animationScope) {
+            var dragMoved = false
             DampedDragAnimation(
                 animationScope = animationScope,
                 initialValue = selectedTabIndex().toFloat(),
@@ -149,11 +153,14 @@ fun LiquidGlassNavBar(
                 visibilityThreshold = 0.001f,
                 initialScale = 1f,
                 pressedScale = 66f / 54f,
-                onDragStarted = {},
+                onDragStarted = { dragMoved = false },
                 onDragStopped = {
+                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabs.size - 1)
+                    if (!dragMoved && targetIndex == currentIndex) {
+                        currentOnTabReselected(targetIndex)
+                    }
                     virtualStretch = 0f
                     virtualStretchY = 0f
-                    val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabs.size - 1)
                     currentIndex = targetIndex
                     animateToValue(targetIndex.toFloat())
                     animationScope.launch {
@@ -167,6 +174,7 @@ fun LiquidGlassNavBar(
                     }
                 },
                 onDrag = { _, dragAmount ->
+                    if (dragAmount != Offset.Zero) dragMoved = true
                     val delta = dragAmount.x / tabWidth * if (isLtr) 1f else -1f
                     val virtual = targetValue + virtualStretch + delta
                     val clamped = virtual.fastCoerceIn(0f, (tabs.size - 1).toFloat())
@@ -222,7 +230,13 @@ fun LiquidGlassNavBar(
             tabs.forEachIndexed { index, tab ->
                 val selected = index == currentIndex
                 LiquidGlassNavBarTab(
-                    onClick = { currentIndex = index },
+                    onClick = {
+                        if (index == currentIndex) {
+                            onTabReselected(index)
+                        } else {
+                            currentIndex = index
+                        }
+                    },
                     icon = tab.first,
                     label = Strings.get(tab.second),
                     selected = selected,

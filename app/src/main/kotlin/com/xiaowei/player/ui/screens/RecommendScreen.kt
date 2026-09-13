@@ -217,7 +217,7 @@ fun RecommendScreen(
                 }
         }
 
-        if (library.albums.isNotEmpty()) {
+        if (library.hotAlbums.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -233,7 +233,7 @@ fun RecommendScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(library.albums.take(10), key = { it.id }) { album ->
+                    items(library.hotAlbums, key = { it.id }) { album ->
                         AlbumTile(
                             album = album,
                             onClick = { onOpenAlbum(album.id) }
@@ -243,7 +243,7 @@ fun RecommendScreen(
             }
         }
 
-        if (library.artists.isNotEmpty()) {
+        if (library.hotArtists.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(10.dp))
                 Text(
@@ -259,7 +259,7 @@ fun RecommendScreen(
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(library.artists.take(10), key = { it.id }) { artist ->
+                    items(library.hotArtists, key = { it.id }) { artist ->
                         ArtistTile(
                             artist = artist,
                             onClick = { onOpenArtist(artist.displayName) }

@@ -543,6 +543,12 @@ fun ShuYinApp(
                                         popDetail()
                                     }
                                 },
+                                onTabReselected = { index ->
+                                    val tab = tabs.getOrNull(index)
+                                    if (tab == Tab.Recommend || tab == Tab.Library) {
+                                        onRefresh()
+                                    }
+                                },
                                 forceFrosted = materialFrosted,
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -27,6 +28,8 @@ data class LibraryState(
     val artists: List<Artist> = emptyList(),
     val albums: List<Album> = emptyList(),
     val recommends: List<RecommendCard> = emptyList(),
+    val hotAlbums: List<Album> = emptyList(),
+    val hotArtists: List<Artist> = emptyList(),
     val searchQuery: String = "",
 
     val favoriteIds: Set<Long> = emptySet(),
@@ -73,6 +76,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val library: StateFlow<LibraryState> = _library.asStateFlow()
 
     private var hasRestoredPlayback = false
+    private var refreshJob: Job? = null
 
     init {
 
@@ -89,7 +93,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refresh(forceRescan: Boolean = false) {
-        viewModelScope.launch {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
             val webDavAccount = WebDavPrefs.get(getApplication()).activeAccount()
             _library.value = _library.value.copy(isLoading = true, webDavActive = webDavAccount != null)
 
@@ -111,6 +116,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val (artists, artistSongMap) = repo.buildArtists(songs)
             val albums = repo.buildAlbums(songs)
             val recommends = repo.buildRecommendCards(songs, artists, albums, artistSongMap)
+            val hotAlbums = albums.shuffled().take(10)
+            val hotArtists = artists.shuffled().take(10)
 
             _library.value = _library.value.copy(
                 isLoading = false,
@@ -119,6 +126,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 artists = artists,
                 albums = albums,
                 recommends = recommends,
+                hotAlbums = hotAlbums,
+                hotArtists = hotArtists,
                 artistSongMap = artistSongMap,
                 webDavActive = webDavAccount != null,
                 webDavErrorKey = webDavError

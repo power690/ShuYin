@@ -153,13 +153,11 @@ fun MiniPlayerBar(
                 onClick()
             }
         }
+        val isLightTheme = MaterialTheme.colorScheme.surface.luminance() >= 0.5f
         val surfaceColor =
             if (LiquidGlassMidEffects) {
-                if (fullEffects) {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
-                }
+                if (isLightTheme) Color(0xFFFAFAFA).copy(0.55f)
+                else Color(0xFF121212).copy(0.60f)
             } else {
                 MaterialTheme.colorScheme.surface
             }
