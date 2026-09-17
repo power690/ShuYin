@@ -857,7 +857,7 @@ fun ClassicPlayerScreen(
                                     if (isLyrics) {
                                         Column(modifier = Modifier.fillMaxSize()) {
                                             androidx.compose.animation.AnimatedVisibility(
-                                                visible = controlsVisible,
+                                                visible = !controlsHiddenByGesture,
                                                 enter = fadeIn(tween(350, easing = FastOutSlowInEasing)),
                                                 exit = fadeOut(tween(350, easing = FastOutSlowInEasing))
                                             ) {
