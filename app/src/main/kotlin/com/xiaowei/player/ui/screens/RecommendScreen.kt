@@ -15,11 +15,14 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +34,8 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
@@ -66,9 +71,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -133,6 +140,20 @@ fun RecommendScreen(
         pool[Random.nextInt(pool.size)]
     }
 
+    val density = LocalDensity.current
+    val scrollDistancePx = with(density) { 60.dp.toPx() }
+    val scrollOffset = remember {
+        derivedStateOf {
+            if (listState.firstVisibleItemIndex == 0) {
+                listState.firstVisibleItemScrollOffset.toFloat()
+            } else {
+                scrollDistancePx
+            }
+        }
+    }
+    val titleProgress = (scrollOffset.value / scrollDistancePx).coerceIn(0f, 1f)
+    val titleTextScale = 1f - (0.15f * titleProgress)
+
     BlurTopBarLayout(
         modifier = Modifier
             .fillMaxSize()
@@ -145,9 +166,13 @@ fun RecommendScreen(
                     .statusBarsPadding()
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             ) {
+                val baseStyle = MaterialTheme.typography.headlineLarge
                 Text(
                     text = Strings.get("app_name"),
-                    style = MaterialTheme.typography.headlineLarge,
+                    style = baseStyle.copy(
+                        fontSize = baseStyle.fontSize * titleTextScale,
+                        lineHeight = baseStyle.lineHeight * titleTextScale
+                    ),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1
@@ -591,6 +616,7 @@ fun SearchScreen(
     bottomPadding: Dp = 100.dp
 ) {
     var query by remember { mutableStateOf("") }
+    var searchedQuery by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     val context = androidx.compose.ui.platform.LocalContext.current
 
@@ -658,8 +684,8 @@ fun SearchScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val results = remember(query, library.songs) {
-        val q = query.trim()
+    val results = remember(searchedQuery, library.songs) {
+        val q = searchedQuery.trim()
         if (q.isEmpty()) emptyList()
         else library.songs.filter {
             it.title.contains(q, true) ||
@@ -699,7 +725,10 @@ fun SearchScreen(
                 )
                 TextField(
                     value = query,
-                    onValueChange = { query = it },
+                    onValueChange = {
+                        query = it
+                        if (it.trim() != searchedQuery) searchedQuery = ""
+                    },
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(focusRequester),
@@ -710,6 +739,17 @@ fun SearchScreen(
                         )
                     },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            val k = query.trim()
+                            if (k.isNotEmpty()) {
+                                searchedQuery = k
+                                addToHistory(k)
+                            }
+                            hideKeyboardAndClearFocus()
+                        }
+                    ),
                     colors = TextFieldDefaults.colors(
                         focusedContainerColor = Color.Transparent,
                         unfocusedContainerColor = Color.Transparent,
@@ -721,7 +761,10 @@ fun SearchScreen(
                     textStyle = MaterialTheme.typography.bodyLarge
                 )
                 if (query.isNotEmpty()) {
-                    IconButton(onClick = { query = "" }) {
+                    IconButton(onClick = {
+                        query = ""
+                        searchedQuery = ""
+                    }) {
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = Strings.get("search_clear"),
@@ -732,7 +775,7 @@ fun SearchScreen(
             }
         }
 
-        val q = query.trim()
+        val q = searchedQuery.trim()
         if (q.isEmpty()) {
 
             LazyColumn(
@@ -778,6 +821,7 @@ fun SearchScreen(
                                     text = keyword,
                                     onClick = {
                                         query = keyword
+                                        searchedQuery = keyword
                                         addToHistory(keyword)
 
                                         hideKeyboardAndClearFocus()
@@ -808,6 +852,7 @@ fun SearchScreen(
                                 text = keyword,
                                 onClick = {
                                     query = keyword
+                                    searchedQuery = keyword
                                     addToHistory(keyword)
 
                                     hideKeyboardAndClearFocus()
@@ -830,9 +875,6 @@ fun SearchScreen(
             }
         } else {
 
-            LaunchedEffect(q) {
-                if (q.isNotEmpty()) addToHistory(q)
-            }
             LazyColumn(
                 contentPadding = PaddingValues(bottom = bottomPadding)
             ) {

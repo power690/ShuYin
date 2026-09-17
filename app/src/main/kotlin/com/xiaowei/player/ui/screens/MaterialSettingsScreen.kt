@@ -35,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +66,13 @@ fun MaterialSettingsScreen(onBack: () -> Unit) {
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val isFrosted = currentStyle == ThemePrefs.MATERIAL_STYLE_FROSTED
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val previewRes = if (isDark) {
+        R.drawable.material_preview_dark
+    } else {
+        R.drawable.material_preview
+    }
 
     val previewBackdrop = rememberLayerBackdrop()
 
@@ -108,7 +116,7 @@ fun MaterialSettingsScreen(onBack: () -> Unit) {
                     .layerBackdrop(previewBackdrop)
             ) {
                 androidx.compose.foundation.Image(
-                    painter = painterResource(id = R.drawable.material_preview),
+                    painter = painterResource(id = previewRes),
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop

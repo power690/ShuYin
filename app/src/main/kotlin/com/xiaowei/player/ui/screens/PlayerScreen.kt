@@ -2,10 +2,14 @@ package com.xiaowei.player.ui.screens
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -30,13 +34,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -71,11 +80,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +98,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
@@ -94,7 +106,6 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.TextUnit
 import coil.compose.AsyncImage
@@ -114,6 +125,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.Density
 import androidx.compose.foundation.lazy.LazyListState
@@ -123,6 +135,9 @@ import android.net.Uri
 import com.xiaowei.player.R
 import androidx.compose.ui.res.stringResource
 import com.xiaowei.player.i18n.Strings
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.clipPath
+import kotlinx.coroutines.flow.distinctUntilChanged
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -150,6 +165,73 @@ fun PlayerScreen(
     val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
     val immersiveLyrics = themePrefs.immersiveLyricsState.value
     val controlsVisible = !(immersiveLyrics && showLyrics)
+
+    val orientationConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+    val windowContainerInfo = androidx.compose.ui.platform.LocalWindowInfo.current
+    val isLandscape =
+        orientationConfiguration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE ||
+                (windowContainerInfo.containerSize.width > 0 &&
+                        windowContainerInfo.containerSize.width > windowContainerInfo.containerSize.height)
+
+    val orientationView = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        val orientationActivity = orientationView.context as? android.app.Activity
+        val resolver = context.contentResolver
+        fun applyOrientation() {
+            val locked = android.provider.Settings.System.getInt(
+                resolver,
+                android.provider.Settings.System.ACCELEROMETER_ROTATION,
+                1
+            ) == 0
+            orientationActivity?.requestedOrientation =
+                if (locked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        }
+        applyOrientation()
+        val rotationObserver = object : android.database.ContentObserver(
+            android.os.Handler(android.os.Looper.getMainLooper())
+        ) {
+            override fun onChange(selfChange: Boolean) {
+                applyOrientation()
+            }
+        }
+        resolver.registerContentObserver(
+            android.provider.Settings.System.getUriFor(android.provider.Settings.System.ACCELEROMETER_ROTATION),
+            false,
+            rotationObserver
+        )
+        onDispose {
+            resolver.unregisterContentObserver(rotationObserver)
+            try {
+                val win = orientationActivity?.window
+                if (win != null) {
+                    val controller = androidx.core.view.WindowCompat.getInsetsController(win, orientationView)
+                    controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                    orientationView.post {
+                        try {
+                            controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                        } catch (_: Exception) { }
+                    }
+                }
+            } catch (_: Exception) { }
+            orientationActivity?.requestedOrientation =
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+        }
+    }
+
+    LaunchedEffect(isLandscape) {
+        try {
+            val window = (orientationView.context as? android.app.Activity)?.window ?: return@LaunchedEffect
+            val controller = androidx.core.view.WindowCompat.getInsetsController(window, orientationView)
+            if (isLandscape) {
+                controller.systemBarsBehavior =
+                    androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            } else {
+                controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+            }
+        } catch (_: Exception) { }
+    }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     LaunchedEffect(Unit) {
@@ -201,9 +283,21 @@ fun PlayerScreen(
     }
 
     CompositionLocalProvider(LocalDensity provides scaledDensity) {
+        val physicalSquare = with(scaledDensity) {
+            val maxPx = if (android.os.Build.VERSION.SDK_INT >= 30) {
+                val wm = context.getSystemService(android.view.WindowManager::class.java)
+                val b = wm.maximumWindowMetrics.bounds
+                maxOf(b.width(), b.height())
+            } else {
+                val dm = context.resources.displayMetrics
+                maxOf(dm.widthPixels, dm.heightPixels)
+            }
+            maxPx.toDp()
+        }
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .clipToBounds()
             .background(
                 Brush.verticalGradient(
                     listOf(
@@ -213,6 +307,36 @@ fun PlayerScreen(
                 )
             )
     ) {
+        if (isLandscape) {
+            Box(
+                modifier = Modifier
+                    .requiredSize(physicalSquare)
+                    .align(Alignment.Center)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                MaterialTheme.colorScheme.primaryContainer,
+                                MaterialTheme.colorScheme.background
+                            )
+                        )
+                    )
+            )
+            MD3LandscapeContent(
+                song = song,
+                playerState = playerState,
+                onCyclePlayMode = onCyclePlayMode,
+                onTogglePlayPause = onTogglePlayPause,
+                onNext = onNext,
+                onPrev = onPrev,
+                onSeek = onSeek,
+                onShowPlaylist = { showPlaylist = true },
+                lyricsListState = lyricsListState,
+                lyricsCurrentIdx = lyricsCurrentIdx,
+                onLyricsCurrentIdxChange = { lyricsCurrentIdx = it },
+                lyricsInitialized = lyricsInitialized,
+                onLyricsInitialized = { lyricsInitialized = true }
+            )
+        } else {
         SharedTransitionLayout {
             Column(
                 modifier = Modifier
@@ -600,6 +724,7 @@ fun PlayerScreen(
                 Spacer(Modifier.height(8.dp))
             }
         }
+        }
 
         if (showPlaylist) {
             BackHandler { showPlaylist = false }
@@ -633,14 +758,18 @@ fun PlayerScreen(
             ),
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
+            val sheetWidthFraction = if (isLandscape) 0.6f else 1f
+            val sheetHeightFraction = if (isLandscape) 0.68f else 0.45f
+            val sheetShape = if (isLandscape) RoundedCornerShape(24.dp)
+            else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.45f)
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .fillMaxWidth(sheetWidthFraction)
+                    .fillMaxHeight(sheetHeightFraction)
+                    .clip(sheetShape)
                     .background(
                         MaterialTheme.colorScheme.surfaceContainerLow,
-                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
+                        sheetShape
                     )
                     .clickable(
                         indication = null,
@@ -694,6 +823,10 @@ private fun LyricsView(
         LyricsParser.parse(song.lyrics)
     }
     val scope = rememberCoroutineScope()
+    val currentIdxState = rememberUpdatedState(currentIdx)
+    val initializedState = rememberUpdatedState(initialized)
+    val onCurrentIdxChangeState = rememberUpdatedState(onCurrentIdxChange)
+    val onInitializedState = rememberUpdatedState(onInitialized)
 
     val livePositionMs by produceState(
         initialValue = positionMs,
@@ -717,22 +850,27 @@ private fun LyricsView(
         }
     }
 
-    LaunchedEffect(livePositionMs, lines) {
+    LaunchedEffect(lines) {
         if (lines.isEmpty()) return@LaunchedEffect
-        val idx = LyricsParser.findCurrentLine(lines, livePositionMs)
-        if (idx != currentIdx && idx >= 0) {
-            onCurrentIdxChange(idx)
-            scope.launch {
-                if (!initialized) {
-
-                    listState.scrollToItem(idx)
-                    onInitialized()
-                } else {
-
-                    listState.animateScrollToItem(idx)
+        snapshotFlow { LyricsParser.findCurrentLine(lines, livePositionMs) }
+            .distinctUntilChanged()
+            .collect { idx ->
+                if (idx >= 0 && idx != currentIdxState.value) {
+                    val previousIdx = currentIdxState.value
+                    val wasInitialized = initializedState.value
+                    onCurrentIdxChangeState.value(idx)
+                    scope.launch {
+                        if (!wasInitialized) {
+                            listState.scrollToItem(idx)
+                            onInitializedState.value()
+                        } else if (idx - previousIdx == 1) {
+                            listState.animateScrollToItem(idx)
+                        } else {
+                            listState.scrollToItem(idx)
+                        }
+                    }
                 }
             }
-        }
     }
 
     if (lines.isEmpty()) {
@@ -828,7 +966,22 @@ private fun LyricsView(
 
                 val lineLivePositionMs = if (isCurrent && line.isWordByWord && isPlaying) livePositionMs else positionMs
                 val useKaraoke = isCurrent && line.isWordByWord && !isBlank
-                val baseSize = if (isCurrent) 21f else 16f
+                val targetSize = if (isCurrent) 21f else 16f
+                val animatedSize by animateFloatAsState(
+                    targetValue = targetSize,
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "lyricLineSize"
+                )
+                val animatedDimColor by animateColorAsState(
+                    targetValue = if (isCurrent) primaryColor else dimColor,
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "lyricLineDimColor"
+                )
+                val animatedUnsungColor by animateColorAsState(
+                    targetValue = if (isCurrent) unsungColor else dimColor,
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "lyricLineUnsungColor"
+                )
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
 
@@ -838,10 +991,12 @@ private fun LyricsView(
                     positionMs = lineLivePositionMs,
                     nextLineTimeMs = nextLineTimeMs,
                     sungColor = sungColor,
-                    unsungColor = unsungColor,
-                    dimColor = if (isCurrent) primaryColor else dimColor,
-                    fontSize = baseSize,
-                    isBold = isCurrent,
+                    unsungColor = animatedUnsungColor,
+                    dimColor = animatedDimColor,
+                    fontSize = targetSize,
+                    maxFontSize = 21f,
+                    scale = animatedSize / targetSize,
+                    fontWeightValue = if (isCurrent) 700f else 400f,
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
@@ -868,7 +1023,9 @@ private fun KaraokeLineAndroidView(
     unsungColor: Color,
     dimColor: Color,
     fontSize: Float,
-    isBold: Boolean,
+    maxFontSize: Float,
+    fontWeightValue: Float,
+    scale: Float,
     modifier: Modifier = Modifier
 ) {
     BoxWithConstraints(modifier) {
@@ -877,11 +1034,11 @@ private fun KaraokeLineAndroidView(
         val textMeasurer = rememberTextMeasurer()
         val baseStyle = TextStyle(
             fontSize = fontSize.sp,
-            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+            fontWeight = FontWeight(fontWeightValue.toInt()),
             textAlign = TextAlign.Center
         )
         val annotatedText = remember(text) { AnnotatedString(text) }
-        val layoutResult = remember(text, fontSize, isBold, maxWidthPx) {
+        val layoutResult = remember(text, fontSize, fontWeightValue, maxWidthPx) {
             textMeasurer.measure(
                 text = annotatedText,
                 style = baseStyle,
@@ -890,22 +1047,45 @@ private fun KaraokeLineAndroidView(
                 constraints = Constraints(maxWidth = maxWidthPx)
             )
         }
+        val frameStyle = TextStyle(
+            fontSize = maxFontSize.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+        val frameResult = remember(text, maxFontSize, maxWidthPx) {
+            textMeasurer.measure(
+                text = annotatedText,
+                style = frameStyle,
+                overflow = TextOverflow.Visible,
+                softWrap = true,
+                constraints = Constraints(maxWidth = maxWidthPx)
+            )
+        }
         val layoutWidthPx = layoutResult.size.width
         val layoutHeightPx = layoutResult.size.height.coerceAtLeast(1)
-        val layoutHeightDp = with(density) { layoutHeightPx.toDp() }
+        val frameHeightPx = frameResult.size.height.coerceAtLeast(layoutHeightPx)
+        val frameHeightDp = with(density) { frameHeightPx.toDp() }
+        val sungPath = remember { Path() }
+        val unsungPath = remember { Path() }
 
         Canvas(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(layoutHeightDp)
+                .height(frameHeightDp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                }
         ) {
             val centerOffsetX = ((size.width - layoutWidthPx) / 2f).coerceAtLeast(0f)
+            val centerOffsetY = ((size.height - layoutHeightPx) / 2f).coerceAtLeast(0f)
 
             if (words == null || words.isEmpty()) {
                 drawText(
                     textLayoutResult = layoutResult,
                     color = dimColor,
-                    topLeft = Offset(centerOffsetX, 0f)
+                    topLeft = Offset(centerOffsetX, centerOffsetY)
                 )
                 return@Canvas
             }
@@ -919,6 +1099,8 @@ private fun KaraokeLineAndroidView(
                 avgSpan = (totalSpan / (words.size - 1)).coerceIn(80L, 800L)
             }
             val lastWordEndTime = words.last().timeMs + avgSpan
+            sungPath.rewind()
+            unsungPath.rewind()
 
             var charOffset = 0
             for (i in words.indices) {
@@ -971,64 +1153,44 @@ private fun KaraokeLineAndroidView(
                 val endTime = if (i + 1 < words.size) words[i + 1].timeMs else lastWordEndTime
                 val span = (endTime - w.timeMs).coerceAtLeast(1L)
 
-                when {
-                    positionMs >= endTime -> {
-                        for (seg in segments) {
-                            clipRect(seg.left, seg.top, seg.right, seg.bottom) {
-                                drawText(
-                                    textLayoutResult = layoutResult,
-                                    color = sungColor,
-                                    topLeft = Offset(centerOffsetX, 0f)
-                                )
-                            }
+                if (positionMs >= endTime) {
+                    for (seg in segments) sungPath.addRect(seg)
+                } else if (positionMs < w.timeMs) {
+                    for (seg in segments) unsungPath.addRect(seg)
+                } else {
+                    val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
+                    val totalWidth = segments.sumOf { it.width.toDouble() }.toFloat()
+                    var remaining = totalWidth * progress
+                    for (seg in segments) {
+                        if (remaining <= 0f && seg.width <= 0f) continue
+                        val sungPart = seg.width.coerceAtMost(remaining)
+                        remaining -= sungPart
+                        if (seg.width > 0f && sungPart < seg.width) {
+                            val splitX = seg.left + sungPart
+                            sungPath.addRect(Rect(seg.left, seg.top, splitX, seg.bottom))
+                            unsungPath.addRect(Rect(splitX, seg.top, seg.right, seg.bottom))
+                        } else {
+                            sungPath.addRect(seg)
                         }
                     }
-                    positionMs < w.timeMs -> {
-                        for (seg in segments) {
-                            clipRect(seg.left, seg.top, seg.right, seg.bottom) {
-                                drawText(
-                                    textLayoutResult = layoutResult,
-                                    color = unsungColor,
-                                    topLeft = Offset(centerOffsetX, 0f)
-                                )
-                            }
-                        }
-                    }
-                    else -> {
-                        val progress = ((positionMs - w.timeMs).toFloat() / span.toFloat()).coerceIn(0f, 1f)
-                        val totalWidth = segments.sumOf { it.width.toDouble() }.toFloat()
-                        var remaining = totalWidth * progress
-                        for (seg in segments) {
-                            if (remaining <= 0f && seg.width <= 0f) continue
-                            val sungPart = seg.width.coerceAtMost(remaining)
-                            remaining -= sungPart
-                            if (seg.width > 0f && sungPart < seg.width) {
-                                val splitX = seg.left + sungPart
-                                clipRect(seg.left, seg.top, splitX, seg.bottom) {
-                                    drawText(
-                                        textLayoutResult = layoutResult,
-                                        color = sungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
-                                    )
-                                }
-                                clipRect(splitX, seg.top, seg.right, seg.bottom) {
-                                    drawText(
-                                        textLayoutResult = layoutResult,
-                                        color = unsungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
-                                    )
-                                }
-                            } else {
-                                clipRect(seg.left, seg.top, seg.right, seg.bottom) {
-                                    drawText(
-                                        textLayoutResult = layoutResult,
-                                        color = sungColor,
-                                        topLeft = Offset(centerOffsetX, 0f)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                }
+            }
+            if (!sungPath.isEmpty) {
+                clipPath(sungPath) {
+                    drawText(
+                        textLayoutResult = layoutResult,
+                        color = sungColor,
+                        topLeft = Offset(centerOffsetX, centerOffsetY)
+                    )
+                }
+            }
+            if (!unsungPath.isEmpty) {
+                clipPath(unsungPath) {
+                    drawText(
+                        textLayoutResult = layoutResult,
+                        color = unsungColor,
+                        topLeft = Offset(centerOffsetX, centerOffsetY)
+                    )
                 }
             }
         }
@@ -1136,6 +1298,326 @@ private fun PlayerCover(
                     .graphicsLayer { alpha = fade.value },
                 contentScale = ContentScale.Crop
             )
+        }
+    }
+}
+
+@Composable
+private fun MD3LandscapeContent(
+    song: Song,
+    playerState: MusicPlayerManager.PlayerState,
+    onCyclePlayMode: () -> Unit,
+    onTogglePlayPause: () -> Unit,
+    onNext: () -> Unit,
+    onPrev: () -> Unit,
+    onSeek: (Long) -> Unit,
+    onShowPlaylist: () -> Unit,
+    lyricsListState: LazyListState,
+    lyricsCurrentIdx: Int,
+    onLyricsCurrentIdxChange: (Int) -> Unit,
+    lyricsInitialized: Boolean,
+    onLyricsInitialized: () -> Unit
+) {
+    var controlsHidden by rememberSaveable { mutableStateOf(false) }
+    val controlsVisible = !controlsHidden
+    val controlsAlpha by animateFloatAsState(
+        targetValue = if (controlsVisible) 1f else 0f,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "LandscapeControlsAlpha"
+    )
+    val progressBlockHeight by animateDpAsState(
+        targetValue = if (controlsVisible) 40.dp else 0.dp,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "LandscapeProgressBlockHeight"
+    )
+    val progressSlide by animateDpAsState(
+        targetValue = if (controlsVisible) 0.dp else 20.dp,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "LandscapeProgressSlide"
+    )
+    val buttonBlockHeight by animateDpAsState(
+        targetValue = if (controlsVisible) 54.dp else 0.dp,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "LandscapeButtonBlockHeight"
+    )
+    val buttonSlide by animateDpAsState(
+        targetValue = if (controlsVisible) 0.dp else 27.dp,
+        animationSpec = tween(350, easing = FastOutSlowInEasing),
+        label = "LandscapeButtonSlide"
+    )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                var totalDrag = 0f
+                detectVerticalDragGestures(
+                    onDragStart = { totalDrag = 0f },
+                    onDragEnd = {
+                        if (totalDrag < -60f) controlsHidden = true
+                        else if (totalDrag > 60f) controlsHidden = false
+                    }
+                ) { _, dragAmount ->
+                    totalDrag += dragAmount
+                }
+            }
+    ) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 28.dp, vertical = 8.dp)
+        ) {
+            val leftWidth = (maxWidth - 48.dp) * 0.38f
+            val coverSize = minOf(
+                leftWidth * 0.88f,
+                maxHeight * 0.70f
+            ).coerceAtMost(300.dp)
+            val landscapeBottomInset = (((maxHeight - coverSize - 12.dp - 28.dp) / 2f) - 14.dp).coerceAtLeast(0.dp)
+            Row(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .weight(0.38f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Card(
+                            modifier = Modifier
+                                .size(coverSize)
+                                .clip(RoundedCornerShape(20.dp)),
+                            shape = RoundedCornerShape(20.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                        ) {
+                            PlayerCover(
+                                modifier = Modifier.fillMaxSize(),
+                                filePath = song.data
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .height(progressBlockHeight)
+                                .graphicsLayer {
+                                    translationY = progressSlide.toPx()
+                                    alpha = controlsAlpha
+                                }
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Spacer(Modifier.height(12.dp))
+                                BoxWithConstraints(
+                                    modifier = Modifier
+                                        .width(coverSize)
+                                        .height(28.dp)
+                                ) {
+                                    val draggingValue = remember { mutableStateOf<Float?>(null) }
+                                    val progress = draggingValue.value ?: if (playerState.durationMs > 0)
+                                        (playerState.positionMs.toFloat() / playerState.durationMs).coerceIn(0f, 1f)
+                                    else 0f
+                                    Slider(
+                                        value = progress,
+                                        onValueChange = { draggingValue.value = it },
+                                        onValueChangeFinished = {
+                                            draggingValue.value?.let { v ->
+                                                onSeek((v * playerState.durationMs).toLong())
+                                            }
+                                            draggingValue.value = null
+                                        },
+                                        valueRange = 0f..1f,
+                                        enabled = controlsVisible,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Text(
+                                        text = formatDuration(playerState.positionMs) + "/" + formatDuration(playerState.durationMs),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .align(Alignment.CenterStart)
+                                            .offset(x = maxWidth + 8.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.width(48.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(0.62f)
+                        .fillMaxHeight()
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = song.title,
+                            style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, textAlign = TextAlign.Center),
+                            color = MaterialTheme.colorScheme.onBackground,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = song.displayAlbumDashArtist,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, textAlign = TextAlign.Center),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+                        )
+                    }
+                    LyricsView(
+                        song = song,
+                        positionMs = playerState.positionMs,
+                        positionUpdateNanos = playerState.positionUpdateNanos,
+                        isPlaying = playerState.isPlaying,
+                        isBuffering = playerState.isBuffering,
+                        onToggle = {},
+                        onSeek = onSeek,
+                        listState = lyricsListState,
+                        currentIdx = lyricsCurrentIdx,
+                        onCurrentIdxChange = onLyricsCurrentIdxChange,
+                        initialized = lyricsInitialized,
+                        onInitialized = onLyricsInitialized,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .height(buttonBlockHeight)
+                            .clipToBounds()
+                            .graphicsLayer {
+                                translationY = buttonSlide.toPx()
+                                alpha = controlsAlpha
+                            }
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.CenterEnd
+                            ) {
+                                IconButton(
+                                    onClick = onPrev,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Filled.SkipPrevious,
+                                        Strings.get("previous"),
+                                        tint = MaterialTheme.colorScheme.onBackground,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            val isPlaying = playerState.isPlaying
+                            val rotation by animateFloatAsState(
+                                targetValue = if (isPlaying) 0f else 360f,
+                                animationSpec = spring(
+                                    stiffness = Spring.StiffnessMedium,
+                                    dampingRatio = Spring.DampingRatioMediumBouncy
+                                ),
+                                label = "LandscapePlayButtonRotation"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(54.dp)
+                                    .rotate(rotation)
+                                    .clip(if (isPlaying) MaterialStarShape else CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) { onTogglePlayPause() },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AnimatedContent(
+                                    targetState = isPlaying,
+                                    transitionSpec = {
+                                        fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleIn(initialScale = 0.9f) togetherWith
+                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                        scaleOut(targetScale = 0.9f)
+                                    },
+                                    label = "LandscapePlayButtonIcon"
+                                ) { playing ->
+                                    Icon(
+                                        imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        contentDescription = if (playing) Strings.get("pause") else Strings.get("play"),
+                                        tint = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Box(
+                                modifier = Modifier.weight(1f),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = onNext,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.SkipNext,
+                                            Strings.get("next"),
+                                            tint = MaterialTheme.colorScheme.onBackground,
+                                            modifier = Modifier.size(30.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    IconButton(
+                                        onClick = onCyclePlayMode,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        val (modeIcon, modeLabelKey, modeTint) = when (playerState.playMode) {
+                                            MusicPlayerManager.PlayMode.SEQUENCE -> Triple(
+                                                Icons.Filled.Repeat, "play_mode_sequence",
+                                                MaterialTheme.colorScheme.onBackground
+                                            )
+                                            MusicPlayerManager.PlayMode.SHUFFLE -> Triple(
+                                                Icons.Filled.Shuffle, "play_mode_shuffle",
+                                                MaterialTheme.colorScheme.primary
+                                            )
+                                            MusicPlayerManager.PlayMode.REPEAT_ONE -> Triple(
+                                                Icons.Filled.RepeatOne, "play_mode_repeat_one",
+                                                MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                        Icon(
+                                            modeIcon,
+                                            Strings.get(modeLabelKey),
+                                            tint = modeTint,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(14.dp))
+                                    IconButton(
+                                        onClick = onShowPlaylist,
+                                        modifier = Modifier.size(44.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Filled.MoreVert,
+                                            Strings.get("playlist"),
+                                            tint = MaterialTheme.colorScheme.onBackground,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(landscapeBottomInset))
+                }
+            }
         }
     }
 }

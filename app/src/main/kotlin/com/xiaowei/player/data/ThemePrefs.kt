@@ -15,7 +15,11 @@ class ThemePrefs private constructor(context: Context) {
     val coverColorEnabledState = mutableStateOf(prefs.getBoolean(KEY_COVER_COLOR, false))
     val coverColorState = mutableStateOf<Int?>(null)
     val materialStyleState = mutableStateOf(prefs.getString(KEY_MATERIAL_STYLE, DEFAULT_MATERIAL_STYLE) ?: DEFAULT_MATERIAL_STYLE)
-    val playerStyleState = mutableStateOf(prefs.getString(KEY_PLAYER_STYLE, DEFAULT_PLAYER_STYLE) ?: DEFAULT_PLAYER_STYLE)
+    val playerStyleState = mutableStateOf(
+        (prefs.getString(KEY_PLAYER_STYLE, DEFAULT_PLAYER_STYLE) ?: DEFAULT_PLAYER_STYLE).let {
+            if (it == PLAYER_STYLE_IMMERSIVE) PLAYER_STYLE_CLASSIC else it
+        }
+    )
     val immersiveLyricsState = mutableStateOf(prefs.getBoolean(KEY_IMMERSIVE_LYRICS, false))
     val lastPrimaryColorState = mutableStateOf(prefs.getInt(KEY_LAST_PRIMARY_COLOR, DEFAULT_PRIMARY_COLOR))
 
@@ -111,6 +115,7 @@ class ThemePrefs private constructor(context: Context) {
         const val DEFAULT_MATERIAL_STYLE = MATERIAL_STYLE_LIQUID
         const val PLAYER_STYLE_MD3 = "md3"
         const val PLAYER_STYLE_CLASSIC = "classic"
+        const val PLAYER_STYLE_IMMERSIVE = "immersive"
         const val DEFAULT_PLAYER_STYLE = PLAYER_STYLE_MD3
         const val DEFAULT_THEME_COLOR_INDEX = 1
         const val DEFAULT_PRIMARY_COLOR: Int = 0xFF005AC8.toInt()

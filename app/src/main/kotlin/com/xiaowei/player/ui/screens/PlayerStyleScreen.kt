@@ -31,6 +31,7 @@ import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -47,6 +48,13 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = androidx.compose.runtime.remember { ThemePrefs.get(context) }
     val currentStyle = themePrefs.playerStyleState.value
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val md3PreviewRes = if (isDark) {
+        com.xiaowei.player.R.drawable.player_style_md3_dark
+    } else {
+        com.xiaowei.player.R.drawable.player_style_md3
+    }
 
     Column(
         modifier = Modifier
@@ -97,7 +105,7 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
                 ) {
                     StylePreviewCard(
                         label = Strings.get("player_style_md3"),
-                        imageRes = com.xiaowei.player.R.drawable.player_style_md3,
+                        imageRes = md3PreviewRes,
                         isSelected = currentStyle == ThemePrefs.PLAYER_STYLE_MD3,
                         width = imageWidth,
                         height = imageHeight,

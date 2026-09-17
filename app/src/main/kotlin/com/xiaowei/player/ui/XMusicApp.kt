@@ -81,6 +81,7 @@ import com.xiaowei.player.ui.screens.SponsorScreen
 import com.xiaowei.player.ui.screens.MaterialSettingsScreen
 import com.xiaowei.player.ui.screens.WebDavScreen
 import com.xiaowei.player.data.WebDavClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.pow
 
@@ -202,29 +203,45 @@ fun ShuYinApp(
     val userMaterialStyle by themePrefs.materialStyleState
     val materialFrosted = userMaterialStyle == com.xiaowei.player.data.ThemePrefs.MATERIAL_STYLE_FROSTED
     val playerStyle by themePrefs.playerStyleState
+
     val useClassicPlayer = playerStyle == com.xiaowei.player.data.ThemePrefs.PLAYER_STYLE_CLASSIC
 
     val systemDarkForBars = androidx.compose.foundation.isSystemInDarkTheme()
 
     LaunchedEffect(playerExpanded) {
         currentView.keepScreenOn = playerExpanded
+        try {
+            val window = (currentView.context as? android.app.Activity)?.window
+            if (window != null) {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(window, currentView)
+                val forceLightStatusBar = playerExpanded && useClassicPlayer
+                controller.isAppearanceLightStatusBars = !forceLightStatusBar && !systemDarkForBars
+                controller.isAppearanceLightNavigationBars = !forceLightStatusBar && !systemDarkForBars
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    window.isStatusBarContrastEnforced = false
+                    window.isNavigationBarContrastEnforced = false
+                }
+                if (!playerExpanded) {
+                    controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                }
+            }
+        } catch (_: Exception) {
+        }
         if (playerExpanded) {
             playerEnterProgress.animateTo(1f, stackSceneSpringSpec())
         } else {
             playerEnterProgress.animateTo(0f, stackSceneSpringSpec())
         }
-        try {
-            val window = (currentView.context as? android.app.Activity)?.window
-                ?: return@LaunchedEffect
-            val controller = androidx.core.view.WindowCompat.getInsetsController(window, currentView)
-            val classicOpen = playerExpanded && useClassicPlayer
-            controller.isAppearanceLightStatusBars = !classicOpen && !systemDarkForBars
-            controller.isAppearanceLightNavigationBars = !classicOpen && !systemDarkForBars
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                window.isStatusBarContrastEnforced = false
-                window.isNavigationBarContrastEnforced = false
+        if (!playerExpanded) {
+            delay(350)
+            try {
+                val window = (currentView.context as? android.app.Activity)?.window
+                if (window != null) {
+                    androidx.core.view.WindowCompat.getInsetsController(window, currentView)
+                        .show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+                }
+            } catch (_: Exception) {
             }
-        } catch (_: Exception) {
         }
     }
 
