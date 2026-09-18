@@ -167,7 +167,7 @@ fun ClassicPlayerScreen(
     var controlsHiddenByGesture by rememberSaveable { mutableStateOf(false) }
     var blurVisible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        delay(200)
+        delay(300)
         blurVisible = true
     }
     val context = androidx.compose.ui.platform.LocalContext.current
