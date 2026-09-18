@@ -114,6 +114,7 @@ import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
 import com.xiaowei.player.ui.components.formatDuration
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
@@ -164,6 +165,11 @@ fun ClassicPlayerScreen(
     var showPlaylist by remember { mutableStateOf(false) }
     var playerStage by rememberSaveable { mutableStateOf(0) }
     var controlsHiddenByGesture by rememberSaveable { mutableStateOf(false) }
+    var blurVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(200)
+        blurVisible = true
+    }
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
     val immersiveLyrics = themePrefs.immersiveLyricsState.value
@@ -377,7 +383,9 @@ fun ClassicPlayerScreen(
                     .requiredSize(physicalSquare)
                     .align(Alignment.Center)
             ) {
-                ClassicBlurredBackground(filePath = song.data)
+                if (blurVisible) {
+                    ClassicBlurredBackground(filePath = song.data)
+                }
             }
             Box(
                 modifier = Modifier
@@ -403,7 +411,6 @@ fun ClassicPlayerScreen(
                     onPrev = onPrev,
                     onSeek = onSeek,
                     onShowPlaylist = { showPlaylist = true },
-                    lyricsListState = lyricsListState,
                     lyricsCurrentIdx = lyricsCurrentIdx,
                     onLyricsCurrentIdxChange = { lyricsCurrentIdx = it },
                     lyricsInitialized = lyricsInitialized,
@@ -1268,7 +1275,7 @@ fun ClassicPlayerScreen(
                                                     transitionSpec = {
                                                         fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
                                                             scaleIn(initialScale = 0.9f) togetherWith
-                                                            fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
+                                                        fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMediumLow)) +
                                                             scaleOut(targetScale = 0.9f)
                                                     },
                                                     label = "PlayButtonIcon"
@@ -1349,7 +1356,7 @@ fun ClassicPlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(if (isLandscape) 0.6f else 1f)
-                        .fillMaxHeight(if (isLandscape) 0.68f else 0.45f)
+                        .fillMaxHeight(if (isLandscape) 0.85f else 0.45f)
                         .clip(if (isLandscape) RoundedCornerShape(24.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                         .background(
                             MaterialTheme.colorScheme.surfaceContainerLow,
@@ -2058,13 +2065,16 @@ private fun ClassicLandscapeContent(
     onPrev: () -> Unit,
     onSeek: (Long) -> Unit,
     onShowPlaylist: () -> Unit,
-    lyricsListState: LazyListState,
     lyricsCurrentIdx: Int,
     onLyricsCurrentIdxChange: (Int) -> Unit,
     lyricsInitialized: Boolean,
     onLyricsInitialized: () -> Unit
 ) {
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
+    val landscapeListState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        if (lyricsCurrentIdx >= 0) landscapeListState.scrollToItem(lyricsCurrentIdx)
+    }
     val controlsVisible = !controlsHidden
     val controlsAlpha by animateFloatAsState(
         targetValue = if (controlsVisible) 1f else 0f,
@@ -2268,7 +2278,7 @@ private fun ClassicLandscapeContent(
                     isBuffering = playerState.isBuffering,
                     onToggle = {},
                     onSeek = onSeek,
-                    listState = lyricsListState,
+                    listState = landscapeListState,
                     currentIdx = lyricsCurrentIdx,
                     onCurrentIdxChange = onLyricsCurrentIdxChange,
                     initialized = lyricsInitialized,

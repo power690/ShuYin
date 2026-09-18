@@ -330,7 +330,6 @@ fun PlayerScreen(
                 onPrev = onPrev,
                 onSeek = onSeek,
                 onShowPlaylist = { showPlaylist = true },
-                lyricsListState = lyricsListState,
                 lyricsCurrentIdx = lyricsCurrentIdx,
                 onLyricsCurrentIdxChange = { lyricsCurrentIdx = it },
                 lyricsInitialized = lyricsInitialized,
@@ -759,7 +758,7 @@ fun PlayerScreen(
             modifier = Modifier.align(Alignment.BottomCenter)
         ) {
             val sheetWidthFraction = if (isLandscape) 0.6f else 1f
-            val sheetHeightFraction = if (isLandscape) 0.68f else 0.45f
+            val sheetHeightFraction = if (isLandscape) 0.85f else 0.45f
             val sheetShape = if (isLandscape) RoundedCornerShape(24.dp)
             else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
             Box(
@@ -1312,13 +1311,16 @@ private fun MD3LandscapeContent(
     onPrev: () -> Unit,
     onSeek: (Long) -> Unit,
     onShowPlaylist: () -> Unit,
-    lyricsListState: LazyListState,
     lyricsCurrentIdx: Int,
     onLyricsCurrentIdxChange: (Int) -> Unit,
     lyricsInitialized: Boolean,
     onLyricsInitialized: () -> Unit
 ) {
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
+    val landscapeListState = rememberLazyListState()
+    LaunchedEffect(Unit) {
+        if (lyricsCurrentIdx >= 0) landscapeListState.scrollToItem(lyricsCurrentIdx)
+    }
     val controlsVisible = !controlsHidden
     val controlsAlpha by animateFloatAsState(
         targetValue = if (controlsVisible) 1f else 0f,
@@ -1478,7 +1480,7 @@ private fun MD3LandscapeContent(
                         isBuffering = playerState.isBuffering,
                         onToggle = {},
                         onSeek = onSeek,
-                        listState = lyricsListState,
+                        listState = landscapeListState,
                         currentIdx = lyricsCurrentIdx,
                         onCurrentIdxChange = onLyricsCurrentIdxChange,
                         initialized = lyricsInitialized,

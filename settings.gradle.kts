@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZMusic"
+rootProject.name = "鼠音"
 include(":app")
