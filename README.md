@@ -91,7 +91,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v 2.4.2.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v2.4.2.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
