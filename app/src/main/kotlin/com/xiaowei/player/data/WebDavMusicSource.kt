@@ -281,6 +281,24 @@ class WebDavMusicSource(private val context: Context) {
             try { mmr.release() } catch (_: Throwable) {}
         }
 
+        if (davFile.ext == "wav" &&
+            (title == null || artist == null || album == null || duration <= 0L || year == 0 || track == 0)
+        ) {
+            try {
+                val wavTag = readWavTagRemote(davFile.url, account)
+                if (wavTag != null) {
+                    if (title == null) title = wavTag.title?.takeIf { it.isNotBlank() }
+                    if (artist == null) artist = wavTag.artist?.takeIf { it.isNotBlank() }
+                    if (album == null) album = wavTag.album?.takeIf { it.isNotBlank() }
+                    if (albumArtist == null) albumArtist = wavTag.albumArtist?.takeIf { it.isNotBlank() }
+                    if (duration <= 0L) duration = wavTag.durationMs
+                    if (year == 0) year = wavTag.year
+                    if (track == 0) track = wavTag.track
+                }
+            } catch (_: Exception) {
+            }
+        }
+
         val lyrics = readLyricsForFile(account, davFile)
 
         val fallbackName = davFile.name.substringBeforeLast('.')
@@ -364,11 +382,23 @@ class WebDavMusicSource(private val context: Context) {
             when (davFile.ext) {
                 "flac" -> readFlacLyrics(davFile.url, account)
                 "mp3" -> readMp3Lyrics(davFile.url, account)
+                "wav" -> readWavLyrics(davFile.url, account)
                 else -> null
             }
         } catch (_: Exception) {
             null
         }
+    }
+
+    private fun readWavTagRemote(url: String, account: WebDavAccount): WavId3Parser.WavTag? {
+        return WavId3Parser.readTagRemote { start, length ->
+            WebDavClient.downloadRangeBytes(account, url, start, length)
+        }
+    }
+
+    private fun readWavLyrics(url: String, account: WebDavAccount): String? {
+        val tag = readWavTagRemote(url, account) ?: return null
+        return tag.lyrics?.takeIf { it.isNotBlank() }
     }
 
     private fun readFlacLyrics(url: String, account: WebDavAccount): String? {

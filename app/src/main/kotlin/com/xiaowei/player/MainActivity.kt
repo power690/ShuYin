@@ -176,7 +176,7 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(showSplash) {
                     if (showSplash) {
-                        delay(2000L)
+                        delay(1200L)
                         showSplash = false
                     }
                 }

@@ -58,7 +58,16 @@ object EmbeddedCoverFetcher {
             val mmr = MediaMetadataRetriever()
             try {
                 mmr.setDataSource(filePath)
-                val data = mmr.embeddedPicture
+                var data = mmr.embeddedPicture
+                if (data == null || data.isEmpty()) {
+                    if (filePath.lowercase().endsWith(".wav")) {
+                        data = try {
+                            WavId3Parser.readCover(file)
+                        } catch (_: Exception) {
+                            null
+                        }
+                    }
+                }
                 if (data != null && data.isNotEmpty()) {
                     byteCache.put(filePath, data)
                     data
@@ -81,14 +90,34 @@ object EmbeddedCoverFetcher {
                 com.xiaowei.player.ShuYinApp.instance
             ).activeAccount()
             val future = networkCoverExecutor.submit(Callable {
-                val mmr = MediaMetadataRetriever()
+                var data: ByteArray? = null
                 try {
-                    val headers = account?.let { mapOf("Authorization" to it.authHeader()) } ?: emptyMap()
-                    mmr.setDataSource(url, headers)
-                    mmr.embeddedPicture
-                } finally {
-                    try { mmr.release() } catch (_: Throwable) {}
+                    val mmr = MediaMetadataRetriever()
+                    try {
+                        val headers = account?.let { mapOf("Authorization" to it.authHeader()) } ?: emptyMap()
+                        mmr.setDataSource(url, headers)
+                        data = mmr.embeddedPicture
+                    } finally {
+                        try { mmr.release() } catch (_: Throwable) {}
+                    }
+                } catch (_: Throwable) {
                 }
+                if (data == null || data.isEmpty()) {
+                    val path = url.substringBefore('?')
+                    if (path.lowercase().endsWith(".wav")) {
+                        val acct = account
+                        if (acct != null) {
+                            data = try {
+                                WavId3Parser.readTagRemote { start, length ->
+                                    WebDavClient.downloadRangeBytes(acct, url, start, length)
+                                }?.apicBytes
+                            } catch (_: Exception) {
+                                null
+                            }
+                        }
+                    }
+                }
+                data
             })
             try {
                 val data = future.get(20, TimeUnit.SECONDS)

@@ -101,9 +101,28 @@ class MusicRepository(private val context: Context) {
 
                         val rawData = cursor.getString(dataCol) ?: ""
                         val data = resolveRealFilePath(rawData)
-                        val title = cursor.getString(titleCol) ?: com.xiaowei.player.i18n.Strings.get("unknown_title")
+                        var title = cursor.getString(titleCol) ?: com.xiaowei.player.i18n.Strings.get("unknown_title")
                         val mime = cursor.getString(mimeCol)
                         val displayName = cursor.getString(displayCol) ?: title
+                        var artist = cursor.getString(artistCol) ?: ""
+                        var album = cursor.getString(albumCol) ?: ""
+                        var albumArtist = cursor.getString(albumArtistCol)
+                        var duration = cursor.getLong(durationCol)
+                        var track = cursor.getInt(trackCol)
+                        var year = cursor.getInt(yearCol)
+
+                        if (data.lowercase().endsWith(".wav")) {
+                            val wavTag = cachedWavTag(data)
+                            if (wavTag != null) {
+                                wavTag.title?.let { title = it }
+                                wavTag.artist?.let { artist = it }
+                                wavTag.album?.let { album = it }
+                                wavTag.albumArtist?.let { albumArtist = it }
+                                if (year == 0 && wavTag.year > 0) year = wavTag.year
+                                if (track == 0 && wavTag.track > 0) track = wavTag.track
+                                if (duration <= 0L && wavTag.durationMs > 0L) duration = wavTag.durationMs
+                            }
+                        }
 
                         val lyrics = readLyrics(data, mime)
 
@@ -111,16 +130,16 @@ class MusicRepository(private val context: Context) {
                             Song(
                                 id = id,
                                 title = title,
-                                artist = cursor.getString(artistCol) ?: "",
+                                artist = artist,
                                 artistId = cursor.getLong(artistIdCol),
-                                album = cursor.getString(albumCol) ?: "",
+                                album = album,
                                 albumId = albumId,
-                                albumArtist = cursor.getString(albumArtistCol),
-                                duration = cursor.getLong(durationCol),
+                                albumArtist = albumArtist,
+                                duration = duration,
                                 data = data,
                                 dateAdded = cursor.getLong(dateCol),
-                                track = cursor.getInt(trackCol),
-                                year = cursor.getInt(yearCol),
+                                track = track,
+                                year = year,
                                 lyrics = lyrics,
                                 mimeType = mime,
                                 size = cursor.getLong(sizeCol)
@@ -189,18 +208,32 @@ class MusicRepository(private val context: Context) {
         val mmr = MediaMetadataRetriever()
         try {
             mmr.setDataSource(filePath)
+            val wavTag = if (filePath.lowercase().endsWith(".wav")) cachedWavTag(filePath) else null
             val title = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_TITLE)
+                ?.takeIf { it.isNotBlank() }
+                ?: wavTag?.title
                 ?: file.nameWithoutExtension
-            val artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST) ?: ""
-            val album = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM) ?: ""
+            val artist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+                ?.takeIf { it.isNotBlank() }
+                ?: wavTag?.artist
+                ?: ""
+            val album = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
+                ?.takeIf { it.isNotBlank() }
+                ?: wavTag?.album
+                ?: ""
             val albumArtist = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+                ?.takeIf { it.isNotBlank() }
+                ?: wavTag?.albumArtist
             val durationStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
             val duration = durationStr?.toLongOrNull() ?: 0L
+            val finalDuration = if (duration > 0) duration else (wavTag?.durationMs ?: 0L)
             val yearStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_YEAR)
-            val year = yearStr?.toIntOrNull() ?: 0
+            val yearRead = yearStr?.toIntOrNull() ?: 0
+            val year = if (yearRead > 0) yearRead else (wavTag?.year ?: 0)
             val mimeTypeStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
             val trackStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
-            val track = trackStr?.split("/")?.firstOrNull()?.toIntOrNull() ?: 0
+            val trackRead = trackStr?.split("/")?.firstOrNull()?.toIntOrNull() ?: 0
+            val track = if (trackRead > 0) trackRead else (wavTag?.track ?: 0)
 
             val id = filePath.hashCode().toLong() and 0xFFFFFFFFL
             val albumId = "$artist|$album".hashCode().toLong() and 0xFFFFFFFFL
@@ -216,7 +249,7 @@ class MusicRepository(private val context: Context) {
                 album = album,
                 albumId = albumId,
                 albumArtist = albumArtist,
-                duration = duration,
+                duration = finalDuration,
                 data = filePath,
                 dateAdded = file.lastModified() / 1000,
                 track = track,
@@ -346,6 +379,8 @@ class MusicRepository(private val context: Context) {
                     FlacLyricsParser.readLyrics(filePath)
                 mime?.contains("mp3", ignoreCase = true) == true || lower.endsWith(".mp3") ->
                     readMp3Uslt(filePath)
+                mime?.contains("wav", ignoreCase = true) == true || lower.endsWith(".wav") ->
+                    cachedWavTag(filePath)?.lyrics
                 else -> null
             }
         } catch (e: Exception) {
@@ -362,6 +397,34 @@ class MusicRepository(private val context: Context) {
             Log.w(TAG, "reloadLyrics failed: ${song.data} - ${e.message}")
             null
         }
+    }
+
+    private val wavTagCache = ConcurrentHashMap<String, WavTagCacheEntry>()
+
+    private class WavTagCacheEntry(
+        val sizeBytes: Long,
+        val mtime: Long,
+        val tag: WavId3Parser.WavTag?
+    )
+
+    private fun cachedWavTag(path: String): WavId3Parser.WavTag? {
+        if (path.isBlank()) return null
+        if (path.startsWith("http://") || path.startsWith("https://")) return null
+        val file = File(path)
+        if (!file.exists() || !file.canRead()) return null
+        val size = file.length()
+        val mtime = file.lastModified()
+        val cached = wavTagCache[path]
+        if (cached != null && cached.sizeBytes == size && cached.mtime == mtime) {
+            return cached.tag
+        }
+        val tag = try {
+            WavId3Parser.readTag(file)
+        } catch (_: Exception) {
+            null
+        }
+        wavTagCache[path] = WavTagCacheEntry(size, mtime, tag)
+        return tag
     }
 
     private val lrcDirCache = ConcurrentHashMap<String, Set<String>>()

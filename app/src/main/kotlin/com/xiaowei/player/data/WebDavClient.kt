@@ -188,4 +188,31 @@ object WebDavClient {
     fun requestHeaders(account: WebDavAccount): Map<String, String> {
         return mapOf("Authorization" to account.authHeader())
     }
+
+    fun downloadRangeBytes(account: WebDavAccount, url: String, start: Long, length: Int): ByteArray? {
+        if (length <= 0 || start < 0) return null
+        return try {
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", account.authHeader())
+                .header("Range", "bytes=$start-${start + length - 1}")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return null
+                val body = response.body ?: return null
+                val out = java.io.ByteArrayOutputStream(length)
+                body.byteStream().copyTo(out, 8192)
+                val bytes = out.toByteArray()
+                if (response.code == 206) {
+                    bytes
+                } else if (start == 0L) {
+                    if (bytes.size > length) bytes.copyOf(length) else bytes
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
 }
