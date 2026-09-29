@@ -1,6 +1,6 @@
 {
-"versionCode": 28,
-"versionName": "2.4.4",
+"versionCode": 27,
+"versionName": "2.4.3",
 "downloadUrl": "https://github.com/power690/ShuYin/releases/download/v2.4.3/ShuYin-release-2.4.3.apk",
 "updateLog": {
 "en": "Fix abnormal display issue on favorites page for WebDAV mount\nFix issue where WAV format metadata cannot be parsed\nAdjust splash screen duration to improve startup speed",
