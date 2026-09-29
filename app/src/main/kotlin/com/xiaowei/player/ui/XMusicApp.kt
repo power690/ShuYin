@@ -137,7 +137,9 @@ fun ShuYinApp(
     var detail by remember { mutableStateOf<Detail>(Detail.None) }
 
     var displayedDetail by remember { mutableStateOf<Detail>(Detail.None) }
+    var backgroundDetail by remember { mutableStateOf<Detail>(Detail.None) }
     var detailBackStack by remember { mutableStateOf<List<Detail>>(emptyList()) }
+    var detailNavDir by remember { mutableStateOf(0) }
     var playerExpanded by rememberSaveable { mutableStateOf(false) }
     var lastSong by remember { mutableStateOf<com.xiaowei.player.data.Song?>(null) }
 
@@ -158,6 +160,9 @@ fun ShuYinApp(
         } else {
             if (detail != Detail.None && newDetail != Detail.None) {
                 detailBackStack = detailBackStack + detail
+                detailNavDir = 1
+            } else {
+                detailNavDir = 0
             }
             detail = newDetail
             detailNonce++
@@ -168,27 +173,62 @@ fun ShuYinApp(
         if (detailBackStack.isNotEmpty()) {
             detail = detailBackStack.last()
             detailBackStack = detailBackStack.dropLast(1)
+            detailNavDir = -1
         } else {
             detail = Detail.None
+            detailNavDir = 0
         }
         detailNonce++
     }
 
     LaunchedEffect(detailNonce) {
         val target = detail
+        val previous = displayedDetail
         if (target != Detail.None) {
 
-            if (displayedDetail != target) {
+            if (previous == Detail.None) {
+
+                backgroundDetail = Detail.None
                 enterProgress.snapTo(0f)
                 displayedDetail = target
-            }
+                enterProgress.animateTo(1f, stackSceneSpringSpec())
+            } else if (previous == target) {
 
-            enterProgress.animateTo(1f, stackSceneSpringSpec())
-        } else if (displayedDetail != Detail.None) {
+                enterProgress.animateTo(1f, stackSceneSpringSpec())
+            } else if (detailNavDir == -1) {
+
+                if (backgroundDetail != Detail.None && backgroundDetail != target) {
+                    enterProgress.animateTo(0f, stackSceneSpringSpec())
+                    displayedDetail = backgroundDetail
+                    backgroundDetail = Detail.None
+                    enterProgress.snapTo(1f)
+                }
+                backgroundDetail = target
+                enterProgress.animateTo(0f, stackSceneSpringSpec())
+                displayedDetail = target
+                enterProgress.snapTo(1f)
+                backgroundDetail = Detail.None
+            } else {
+
+                backgroundDetail = previous
+                enterProgress.snapTo(0f)
+                displayedDetail = target
+                enterProgress.animateTo(1f, stackSceneSpringSpec())
+                backgroundDetail = Detail.None
+            }
+        } else if (previous != Detail.None) {
+
+            if (backgroundDetail != Detail.None) {
+                enterProgress.animateTo(0f, stackSceneSpringSpec())
+                displayedDetail = backgroundDetail
+                backgroundDetail = Detail.None
+                enterProgress.snapTo(1f)
+            }
 
             enterProgress.animateTo(0f, stackSceneSpringSpec())
 
             displayedDetail = Detail.None
+            backgroundDetail = Detail.None
 
             enterProgress.snapTo(0f)
         }
@@ -378,7 +418,7 @@ fun ShuYinApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow)
         ) {
             when {
                 !library.permissionGranted -> {
@@ -422,7 +462,9 @@ fun ShuYinApp(
                             .drawWithContent {
                                 val detailP = enterProgress.value.coerceIn(0f, 1f)
                                 val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
-                                val compression = maxOf(detailP, playerP)
+                                val detailCover =
+                                    if (backgroundDetail != Detail.None) 1f else detailP
+                                val compression = maxOf(detailCover, playerP)
                                 val animating =
                                     enterProgress.isRunning || playerEnterProgress.isRunning
 
@@ -574,66 +616,12 @@ fun ShuYinApp(
                         }
                     }
 
-                    if (displayedDetail != Detail.None) {
-                        val detailAnimLayer = rememberGraphicsLayer()
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .drawWithContent {
-                                    val enter = enterProgress.value
-                                    val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
-                                    val animating =
-                                        enterProgress.isRunning || playerEnterProgress.isRunning
-
-                                    if (enter < 1f || playerP > 0f || animating) {
-                                        detailAnimLayer.record {
-                                            this@drawWithContent.drawContent()
-                                        }
-                                        val enterScale = ENTER_SCALE_MIN + (1f - ENTER_SCALE_MIN) * enter
-                                        val compressScale = COMPRESS_SCALE_MIN +
-                                            (1f - COMPRESS_SCALE_MIN) * (1f - playerP)
-                                        detailAnimLayer.pivotOffset =
-                                            Offset(size.width / 2f, size.height / 2f)
-                                        detailAnimLayer.scaleX = enterScale * compressScale
-                                        detailAnimLayer.scaleY = enterScale * compressScale
-
-                                        detailAnimLayer.translationX = (1f - enter) * size.width -
-                                            playerP * size.width * COMPRESS_TRANSLATE_FRACTION
-
-                                        val radiusDp = ENTER_RADIUS_DP -
-                                            enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP +
-                                            playerP * ENTER_RADIUS_DP
-                                        detailAnimLayer.setOutline(
-                                            RoundedCornerShape(radiusDp.dp).createOutline(
-                                                size, layoutDirection, this
-                                            )
-                                        )
-                                        detailAnimLayer.clip = true
-
-                                        detailAnimLayer.shadowElevation =
-                                            ENTER_SHADOW_MAX.dp.toPx() * (1f - enter)
-
-                                        if (supportsBlur && playerP > 0f &&
-                                            playerEnterProgress.isRunning) {
-                                            val blurSigma = playerP * density * BLUR_MAX_DP
-                                            detailAnimLayer.renderEffect =
-                                                BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
-                                        }
-                                        drawLayer(detailAnimLayer)
-                                    } else {
-                                        drawContent()
-                                    }
-                                }
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) {
-
-                                }
-                        ) {
-                            when (displayedDetail) {
+                    if (displayedDetail != Detail.None || backgroundDetail != Detail.None) {
+                        @Composable
+                        fun DetailScene(target: Detail) {
+                            when (target) {
                                 is Detail.Artist -> ArtistDetailScreen(
-                                    artistName = (displayedDetail as Detail.Artist).name,
+                                    artistName = target.name,
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
@@ -643,7 +631,7 @@ fun ShuYinApp(
                                     onOpenPlayer = { playerExpanded = true }
                                 )
                                 is Detail.Album -> AlbumDetailScreen(
-                                    albumId = (displayedDetail as Detail.Album).albumId,
+                                    albumId = target.albumId,
                                     library = library,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
@@ -652,7 +640,7 @@ fun ShuYinApp(
                                     onOpenPlayer = { playerExpanded = true }
                                 )
                                 is Detail.RecommendDetail -> RecommendDetailScreen(
-                                    card = (displayedDetail as Detail.RecommendDetail).card,
+                                    card = target.card,
                                     playerState = playerState,
                                     onPlaySong = onPlaySong,
                                     onAddSong = onAddSong,
@@ -705,6 +693,114 @@ fun ShuYinApp(
                                     onBack = { popDetail() }
                                 )
                                 Detail.None -> {  }
+                            }
+                        }
+
+                        if (backgroundDetail != Detail.None) {
+                            val bgAnimLayer = rememberGraphicsLayer()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .drawWithContent {
+                                        val detailP = enterProgress.value.coerceIn(0f, 1f)
+                                        val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
+                                        val compression = maxOf(detailP, playerP)
+                                        val animating =
+                                            enterProgress.isRunning || playerEnterProgress.isRunning
+
+                                        if (compression > 0f || animating) {
+                                            bgAnimLayer.record {
+                                                this@drawWithContent.drawContent()
+                                            }
+                                            val scale = COMPRESS_SCALE_MIN +
+                                                (1f - COMPRESS_SCALE_MIN) * (1f - compression)
+                                            bgAnimLayer.pivotOffset =
+                                                Offset(size.width / 2f, size.height / 2f)
+                                            bgAnimLayer.scaleX = scale
+                                            bgAnimLayer.scaleY = scale
+
+                                            bgAnimLayer.translationX =
+                                                -compression * size.width * COMPRESS_TRANSLATE_FRACTION
+
+                                            if (supportsBlur && compression > 0f && animating) {
+                                                val blurSigma = compression * density * BLUR_MAX_DP
+                                                bgAnimLayer.renderEffect =
+                                                    BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
+                                            }
+                                            drawLayer(bgAnimLayer)
+                                        } else {
+                                            drawContent()
+                                        }
+                                    }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+
+                                    }
+                            ) {
+                                DetailScene(backgroundDetail)
+                            }
+                        }
+
+                        if (displayedDetail != Detail.None) {
+                            val detailAnimLayer = rememberGraphicsLayer()
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .drawWithContent {
+                                        val enter = enterProgress.value
+                                        val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
+                                        val animating =
+                                            enterProgress.isRunning || playerEnterProgress.isRunning
+
+                                        if (enter < 1f || playerP > 0f || animating) {
+                                            detailAnimLayer.record {
+                                                this@drawWithContent.drawContent()
+                                            }
+                                            val enterScale = ENTER_SCALE_MIN + (1f - ENTER_SCALE_MIN) * enter
+                                            val compressScale = COMPRESS_SCALE_MIN +
+                                                (1f - COMPRESS_SCALE_MIN) * (1f - playerP)
+                                            detailAnimLayer.pivotOffset =
+                                                Offset(size.width / 2f, size.height / 2f)
+                                            detailAnimLayer.scaleX = enterScale * compressScale
+                                            detailAnimLayer.scaleY = enterScale * compressScale
+
+                                            detailAnimLayer.translationX = (1f - enter) * size.width -
+                                                playerP * size.width * COMPRESS_TRANSLATE_FRACTION
+
+                                            val radiusDp = ENTER_RADIUS_DP -
+                                                enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP +
+                                                playerP * ENTER_RADIUS_DP
+                                            detailAnimLayer.setOutline(
+                                                RoundedCornerShape(radiusDp.dp).createOutline(
+                                                    size, layoutDirection, this
+                                                )
+                                            )
+                                            detailAnimLayer.clip = true
+
+                                            detailAnimLayer.shadowElevation =
+                                                ENTER_SHADOW_MAX.dp.toPx() * (1f - enter)
+
+                                            if (supportsBlur && playerP > 0f &&
+                                                playerEnterProgress.isRunning) {
+                                                val blurSigma = playerP * density * BLUR_MAX_DP
+                                                detailAnimLayer.renderEffect =
+                                                    BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
+                                            }
+                                            drawLayer(detailAnimLayer)
+                                        } else {
+                                            drawContent()
+                                        }
+                                    }
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+
+                                    }
+                            ) {
+                                DetailScene(displayedDetail)
                             }
                         }
                     }

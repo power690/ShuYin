@@ -447,7 +447,23 @@ class MusicPlayerManager(
         }
     }
 
+    private var pendingSeekPositionMs: Long = -1L
+    private var pendingSeekAtElapsed: Long = 0L
+
+    private fun resolvePosition(raw: Long): Long {
+        val target = pendingSeekPositionMs
+        if (target < 0) return raw
+        val since = android.os.SystemClock.elapsedRealtime() - pendingSeekAtElapsed
+        if (since > 1500L || kotlin.math.abs(raw - target) <= 400L) {
+            pendingSeekPositionMs = -1L
+            return raw
+        }
+        return target
+    }
+
     fun seekTo(positionMs: Long) {
+        pendingSeekPositionMs = positionMs
+        pendingSeekAtElapsed = android.os.SystemClock.elapsedRealtime()
         player.seekTo(positionMs)
         _state.update { it.copy(positionMs = positionMs) }
     }
@@ -643,7 +659,7 @@ class MusicPlayerManager(
         tickerJob = scope.launch {
             var saveCounter = 0
             while (true) {
-                val pos = player.currentPosition.coerceAtLeast(0)
+                val pos = resolvePosition(player.currentPosition).coerceAtLeast(0)
                 val dur = player.duration.coerceAtLeast(0)
                 val nowNanos = System.nanoTime()
                 _state.update { it.copy(positionMs = pos, durationMs = dur, positionUpdateNanos = nowNanos) }

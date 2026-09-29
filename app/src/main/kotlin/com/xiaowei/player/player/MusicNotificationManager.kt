@@ -62,6 +62,19 @@ class MusicNotificationManager(
     private var cachedParams: CachedNotificationParams? = null
     private var trackedSongId: Long = -1L
     private var lastSafeDuration: Long = 0L
+    private var pendingSeekPositionMs: Long = -1L
+    private var pendingSeekAtElapsed: Long = 0L
+
+    private fun resolveDisplayPosition(rawPosition: Long): Long {
+        val target = pendingSeekPositionMs
+        if (target < 0) return rawPosition
+        val since = SystemClock.elapsedRealtime() - pendingSeekAtElapsed
+        if (since > 1500L || kotlin.math.abs(rawPosition - target) <= 400L) {
+            pendingSeekPositionMs = -1L
+            return rawPosition
+        }
+        return target
+    }
 
     init {
         createNotificationChannel()
@@ -93,7 +106,7 @@ class MusicNotificationManager(
             if (duration > 0) {
                 lastSafeDuration = duration
             }
-            val safePosition = currentPosition.coerceAtLeast(0L)
+            val safePosition = resolveDisplayPosition(currentPosition).coerceAtLeast(0L)
             val displaySpeed = if (isPlaying) 1.0f else 0.0f
             val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
 
@@ -122,8 +135,12 @@ class MusicNotificationManager(
         }
     }
 
-    fun onSeekTo(position: Long) {
+    fun onSeekTo(position: Long, isPlaying: Boolean) {
         if (position >= 0) {
+            pendingSeekPositionMs = position
+            pendingSeekAtElapsed = SystemClock.elapsedRealtime()
+            val speed = if (isPlaying) 1.0f else 0.0f
+            val state = if (isPlaying) PlaybackStateCompat.STATE_PLAYING else PlaybackStateCompat.STATE_PAUSED
             val playbackState = PlaybackStateCompat.Builder()
                 .setActions(
                     PlaybackStateCompat.ACTION_PLAY or
@@ -132,7 +149,7 @@ class MusicNotificationManager(
                         PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                         PlaybackStateCompat.ACTION_SEEK_TO
                 )
-                .setState(PlaybackStateCompat.STATE_PLAYING, position, 1.0f, SystemClock.elapsedRealtime())
+                .setState(state, position, speed, SystemClock.elapsedRealtime())
                 .build()
             mediaSession.setPlaybackState(playbackState)
         }
@@ -155,7 +172,7 @@ class MusicNotificationManager(
             lastSafeDuration = duration
         }
         val safeDuration = lastSafeDuration
-        val safePosition = currentPosition.coerceAtLeast(0L)
+        val safePosition = resolveDisplayPosition(currentPosition).coerceAtLeast(0L)
 
         cachedParams = CachedNotificationParams(song, isPlaying, playMode, isFavorite)
         loadAlbumArt(song)

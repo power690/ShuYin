@@ -231,7 +231,7 @@ class PlaybackService : Service() {
             override fun onSkipToPrevious() { playerManager.skipToPrevious(); updateNotificationIfNeeded(forceRebuild = true) }
             override fun onSeekTo(pos: Long) {
                 playerManager.seekTo(pos)
-                notificationManager.onSeekTo(pos)
+                notificationManager.onSeekTo(pos, playerManager.state.value.isPlaying)
             }
         })
     }
