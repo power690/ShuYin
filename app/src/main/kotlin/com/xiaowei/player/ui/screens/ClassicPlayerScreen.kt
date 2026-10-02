@@ -2031,12 +2031,22 @@ private fun ClassicBlurredBackground(filePath: String?) {
                 inSampleSize = sample
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             }
-            val source = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            val source = try {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            } catch (_: OutOfMemoryError) {
+                null
+            }
             if (source == null) return@withContext
-            val result = com.xiaowei.player.NativeBlurUtils.blur(source, 25)
-            if (source !== result && !source.isRecycled) source.recycle()
-            shownBitmap = result
-            loadedFile = filePath
+            val result = try {
+                com.xiaowei.player.NativeBlurUtils.blur(source, 25)
+            } catch (_: OutOfMemoryError) {
+                null
+            }
+            if (result != null) {
+                if (source !== result && !source.isRecycled) source.recycle()
+                shownBitmap = result
+                loadedFile = filePath
+            }
         }
     }
     Crossfade(

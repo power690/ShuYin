@@ -321,6 +321,9 @@ class MusicNotificationManager(
                 if (e is kotlinx.coroutines.CancellationException) throw e
                 Log.e(TAG, "Error loading album art: ${e.message}")
                 currentLargeIcon = createDefaultAlbumArt()
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "Error loading album art: OOM")
+                currentLargeIcon = createDefaultAlbumArt()
             }
         }
     }

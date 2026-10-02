@@ -38,12 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaowei.player.i18n.Strings
 
-private data class LanguageOption(
+internal data class LanguageOption(
     val code: String?,
     val displayName: String,
 )
 
-private val LANGUAGE_OPTIONS = listOf(
+internal val LANGUAGE_OPTIONS = listOf(
     LanguageOption(null, ""),  
 
     LanguageOption("zh", "简体中文"),

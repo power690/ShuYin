@@ -46,17 +46,6 @@ private val STYLE_PREVIEW_RATIO = 0.45f
 
 @Composable
 fun PlayerStyleScreen(onBack: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val themePrefs = androidx.compose.runtime.remember { ThemePrefs.get(context) }
-    val currentStyle = themePrefs.playerStyleState.value
-
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val md3PreviewRes = if (isDark) {
-        com.xiaowei.player.R.drawable.player_style_md3_dark
-    } else {
-        com.xiaowei.player.R.drawable.player_style_md3
-    }
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -95,12 +84,30 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
             )
         }
 
-        BoxWithConstraints(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp)
-        ) {
+        PlayerStyleContent(
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+fun PlayerStyleContent(modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val themePrefs = androidx.compose.runtime.remember { ThemePrefs.get(context) }
+    val currentStyle = themePrefs.playerStyleState.value
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val md3PreviewRes = if (isDark) {
+        com.xiaowei.player.R.drawable.player_style_md3_dark
+    } else {
+        com.xiaowei.player.R.drawable.player_style_md3
+    }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
             val gap = 16.dp
             val imageHeight = minOf(maxHeight * 0.55f, ((maxWidth - gap) / 2) / STYLE_PREVIEW_RATIO)
             val imageWidth = imageHeight * STYLE_PREVIEW_RATIO
@@ -133,7 +140,6 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
             }
         }
     }
-}
 
 @Composable
 private fun StylePreviewCard(

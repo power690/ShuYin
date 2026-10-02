@@ -20,6 +20,7 @@ import java.io.DataOutputStream
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
@@ -569,6 +570,8 @@ class WebDavMusicSource(private val context: Context) {
             }
         } catch (_: Exception) {
             return emptyMap()
+        } catch (_: OutOfMemoryError) {
+            return emptyMap()
         }
     }
 
@@ -668,6 +671,7 @@ class WebDavMusicSource(private val context: Context) {
     private fun readString(dis: DataInputStream): String? {
         val len = dis.readInt()
         if (len < 0) return null
+        if (len > MAX_STRING_BYTES) throw IOException("corrupt webdav cache")
         val bytes = ByteArray(len)
         dis.readFully(bytes)
         return String(bytes, Charsets.UTF_8)
@@ -689,15 +693,27 @@ class WebDavMusicSource(private val context: Context) {
     private fun readCompressed(dis: DataInputStream): String? {
         val len = dis.readInt()
         if (len < 0) return null
+        if (len > MAX_COMPRESSED_BYTES) throw IOException("corrupt webdav cache")
         val compressed = ByteArray(len)
         dis.readFully(compressed)
         return GZIPInputStream(ByteArrayInputStream(compressed)).use { gzip ->
-            gzip.readBytes().toString(Charsets.UTF_8)
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            while (true) {
+                val read = gzip.read(buffer)
+                if (read < 0) break
+                if (out.size() + read > MAX_DECOMPRESSED_BYTES) throw IOException("corrupt webdav cache")
+                out.write(buffer, 0, read)
+            }
+            String(out.toByteArray(), Charsets.UTF_8)
         }
     }
 
     companion object {
         private const val TAG = "WebDavMusicSource"
+        private const val MAX_STRING_BYTES = 1024 * 1024
+        private const val MAX_COMPRESSED_BYTES = 4 * 1024 * 1024
+        private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
         private const val SCAN_PARALLELISM = 8
         private const val CACHE_MAGIC = 0x57444156
         private const val CACHE_VERSION = 3

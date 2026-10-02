@@ -42,10 +42,12 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LyricsParser
+import com.xiaowei.player.data.SetupWizardPrefs
 import com.xiaowei.player.data.UpdateChecker
 import com.xiaowei.player.player.DesktopLyricService
 import com.xiaowei.player.player.PlaybackService
 import com.xiaowei.player.ui.ShuYinApp
+import com.xiaowei.player.ui.screens.SetupWizardScreen
 import com.xiaowei.player.ui.screens.UpdateCheckerHost
 import com.xiaowei.player.ui.theme.ZMusicTheme
 import kotlinx.coroutines.delay
@@ -57,11 +59,15 @@ class MainActivity : ComponentActivity() {
 
     private var showSplash by mutableStateOf(true)
 
+    private var showSetupWizard by mutableStateOf(false)
+
     private var floatingLyricEnabled by mutableStateOf(false)
 
     private var isSystemDarkTheme by mutableStateOf(false)
 
     private val darkModePrefs by lazy { DarkModePrefs.get(this) }
+
+    private val setupWizardPrefs by lazy { SetupWizardPrefs.get(this) }
 
     private var cachedLyrics: List<DesktopLyricService.FloatingLyricLine> = emptyList()
     private var cachedLyricSongId: Long = -1L
@@ -123,6 +129,8 @@ class MainActivity : ComponentActivity() {
 
         showSplash = savedInstanceState == null
 
+        showSetupWizard = !setupWizardPrefs.wizardCompleted
+
         isSystemDarkTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
 
         com.xiaowei.player.data.LocalePrefs.get(this).languageCode?.let {
@@ -167,7 +175,9 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wasManageStorageGranted = android.os.Environment.isExternalStorageManager()
         }
-        checkPermissionAndLoad()
+        if (!showSetupWizard) {
+            checkPermissionAndLoad()
+        }
 
         setContent {
             val effectiveDark = darkModePrefs.isDarkTheme(isSystemDarkTheme)
@@ -207,62 +217,78 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.background)
                     ) {
-                        ShuYinApp(
-                            library = state,
-                            playerState = playerState,
-                            playerPlaylist = viewModel.playerManager.playlist,
-                            onPlaySong = { song, list -> viewModel.playAllFrom(list, song) },
-                            onAddSong = { song -> viewModel.addToQueue(song) },
-                            onRefresh = {
-
-                                if (com.xiaowei.player.data.WebDavPrefs.get(this@MainActivity).activeAccount() != null) {
-                                    viewModel.refresh(true)
-                                    return@ShuYinApp
-                                }
-                                val customPath = com.xiaowei.player.data.CustomPathPrefs
-                                    .get(this@MainActivity).path.trim()
-                                if (customPath.isNotBlank()) {
-
-                                    val hasManagePerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                        android.os.Environment.isExternalStorageManager()
-                                    } else {
-                                        ContextCompat.checkSelfPermission(
-                                            this@MainActivity,
-                                            Manifest.permission.READ_EXTERNAL_STORAGE
-                                        ) == PackageManager.PERMISSION_GRANTED
+                        if (showSetupWizard) {
+                            SetupWizardScreen(
+                                onFinish = {
+                                    setupWizardPrefs.wizardCompleted = true
+                                    showSetupWizard = false
+                                    try {
+                                        viewModel.playerManager.updateAudioFocusHandling(
+                                            com.xiaowei.player.data.AudioMixPrefs.get(this@MainActivity).mixWithOthers
+                                        )
+                                    } catch (_: Exception) {
                                     }
-                                    if (hasManagePerm) {
-                                        viewModel.refresh()
-                                    } else {
-                                        requestManageStoragePermission()
-                                    }
-                                } else {
-
-                                    if (state.permissionGranted) viewModel.refresh()
-                                    else permissionLauncher.launch(requiredPermissions())
+                                    checkPermissionAndLoad()
                                 }
-                            },
-                            onSearch = viewModel::setSearchQuery,
-                            onTogglePlayPause = viewModel.playerManager::togglePlayPause,
-                            onSkipNext = viewModel.playerManager::skipToNext,
-                            onSkipPrev = viewModel.playerManager::skipToPrevious,
-                            onSeek = viewModel.playerManager::seekTo,
-                            onCyclePlayMode = viewModel.playerManager::cyclePlayMode,
-                            onPlayAtIndex = viewModel.playerManager::playAtIndex,
-                            onRemoveFromQueue = viewModel.playerManager::removeFromQueue,
-                            onClearQueue = viewModel.playerManager::clearQueue,
-                            onToggleFavorite = viewModel::toggleFavorite,
-                            onRemoveFavorites = viewModel::removeFavorites,
-                            floatingLyricEnabled = floatingLyricEnabled,
-                            onToggleFloatingLyric = { toggleFloatingLyric() },
-                            onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) },
-                            onWebDavChanged = { viewModel.refreshFromWebDav() }
-                        )
+                            )
+                        } else {
+                            ShuYinApp(
+                                library = state,
+                                playerState = playerState,
+                                playerPlaylist = viewModel.playerManager.playlist,
+                                onPlaySong = { song, list -> viewModel.playAllFrom(list, song) },
+                                onAddSong = { song -> viewModel.addToQueue(song) },
+                                onRefresh = {
 
-                        UpdateCheckerHost(
-                            onCheckRequested = { },
-                            manualTrigger = null
-                        )
+                                    if (com.xiaowei.player.data.WebDavPrefs.get(this@MainActivity).activeAccount() != null) {
+                                        viewModel.refresh(true)
+                                        return@ShuYinApp
+                                    }
+                                    val customPath = com.xiaowei.player.data.CustomPathPrefs
+                                        .get(this@MainActivity).path.trim()
+                                    if (customPath.isNotBlank()) {
+
+                                        val hasManagePerm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                            android.os.Environment.isExternalStorageManager()
+                                        } else {
+                                            ContextCompat.checkSelfPermission(
+                                                this@MainActivity,
+                                                Manifest.permission.READ_EXTERNAL_STORAGE
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                        }
+                                        if (hasManagePerm) {
+                                            viewModel.refresh()
+                                        } else {
+                                            requestManageStoragePermission()
+                                        }
+                                    } else {
+
+                                        if (state.permissionGranted) viewModel.refresh()
+                                        else permissionLauncher.launch(requiredPermissions())
+                                    }
+                                },
+                                onSearch = viewModel::setSearchQuery,
+                                onTogglePlayPause = viewModel.playerManager::togglePlayPause,
+                                onSkipNext = viewModel.playerManager::skipToNext,
+                                onSkipPrev = viewModel.playerManager::skipToPrevious,
+                                onSeek = viewModel.playerManager::seekTo,
+                                onCyclePlayMode = viewModel.playerManager::cyclePlayMode,
+                                onPlayAtIndex = viewModel.playerManager::playAtIndex,
+                                onRemoveFromQueue = viewModel.playerManager::removeFromQueue,
+                                onClearQueue = viewModel.playerManager::clearQueue,
+                                onToggleFavorite = viewModel::toggleFavorite,
+                                onRemoveFavorites = viewModel::removeFavorites,
+                                floatingLyricEnabled = floatingLyricEnabled,
+                                onToggleFloatingLyric = { toggleFloatingLyric() },
+                                onCustomPathConfirm = { path -> viewModel.refreshFromPath(path) },
+                                onWebDavChanged = { viewModel.refreshFromWebDav() }
+                            )
+
+                            UpdateCheckerHost(
+                                onCheckRequested = { },
+                                manualTrigger = null
+                            )
+                        }
 
                         AnimatedVisibility(
                             visible = showSplash,

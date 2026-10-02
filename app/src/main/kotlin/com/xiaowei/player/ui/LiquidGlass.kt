@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -29,6 +30,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -39,9 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
@@ -52,6 +59,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.lerp
@@ -98,7 +106,7 @@ fun LiquidGlassNavBar(
     val contentColor = if (isLightTheme) Color.Black else Color.White
     val fullEffects = !forceFrosted && LiquidGlassFullEffects
     val midEffects = forceFrosted || LiquidGlassMidEffects
-    val selectedContentColor = contentColor
+    val selectedContentColor = MaterialTheme.colorScheme.primary
     val containerColor =
         if (LiquidGlassMidEffects) {
             if (isLightTheme) Color(0xFFFAFAFA).copy(0.55f)
@@ -226,9 +234,12 @@ fun LiquidGlassNavBar(
             )
         }
 
+        val selectorPosition = remember(dampedDragAnimation) {
+            { dampedDragAnimation.value }
+        }
+
         val tabsContent: @Composable RowScope.() -> Unit = {
             tabs.forEachIndexed { index, tab ->
-                val selected = index == currentIndex
                 LiquidGlassNavBarTab(
                     onClick = {
                         if (index == currentIndex) {
@@ -239,9 +250,10 @@ fun LiquidGlassNavBar(
                     },
                     icon = tab.first,
                     label = Strings.get(tab.second),
-                    selected = selected,
+                    index = index,
                     contentColor = contentColor,
-                    selectedColor = selectedContentColor
+                    selectedColor = selectedContentColor,
+                    selectorPosition = selectorPosition
                 )
             }
         }
@@ -420,12 +432,14 @@ private fun RowScope.LiquidGlassNavBarTab(
     onClick: () -> Unit,
     icon: ImageVector,
     label: String,
-    selected: Boolean,
+    index: Int,
     contentColor: Color,
-    selectedColor: Color
+    selectedColor: Color,
+    selectorPosition: () -> Float
 ) {
     val scale = LocalLiquidGlassTabScale.current
-    Column(
+    val pillClipPath = remember { Path() }
+    Box(
         Modifier
             .clip(RoundedCornerShape(26.dp))
             .clickable(
@@ -436,25 +450,109 @@ private fun RowScope.LiquidGlassNavBarTab(
             )
             .fillMaxHeight()
             .weight(1f)
-            .graphicsLayer {
-                val scale = scale()
-                scaleX = scale
-                scaleY = scale
-            },
+    ) {
+        NavBarTabContent(
+            icon = icon,
+            label = label,
+            color = contentColor,
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val tabScale = scale()
+                    scaleX = tabScale
+                    scaleY = tabScale
+                }
+        )
+        NavBarTabContent(
+            icon = icon,
+            label = label,
+            color = selectedColor,
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer {
+                    val tabScale = scale()
+                    scaleX = tabScale
+                    scaleY = tabScale
+                }
+                .drawWithContent {
+                    val delta = if (layoutDirection == LayoutDirection.Ltr) {
+                        selectorPosition() - index
+                    } else {
+                        index - selectorPosition()
+                    }
+                    if (delta > -1f && delta < 1f) {
+                        val tabWidthPx = size.width
+                        val rawLeft = delta * tabWidthPx
+                        val rawRight = rawLeft + tabWidthPx
+                        val left = rawLeft.coerceIn(0f, tabWidthPx)
+                        val right = rawRight.coerceIn(0f, tabWidthPx)
+                        if (right > left) {
+                            val maxRadius = minOf(
+                                26.dp.toPx(),
+                                size.height / 2f,
+                                (right - left) / 2f
+                            )
+                            val leftRadius = if (rawLeft > 0f) maxRadius else 0f
+                            val rightRadius = if (rawRight < tabWidthPx) maxRadius else 0f
+                            pillClipPath.reset()
+                            pillClipPath.addRoundRect(
+                                RoundRect(
+                                    left = left,
+                                    top = 0f,
+                                    right = right,
+                                    bottom = size.height,
+                                    topLeftCornerRadius = CornerRadius(leftRadius),
+                                    topRightCornerRadius = CornerRadius(rightRadius),
+                                    bottomRightCornerRadius = CornerRadius(rightRadius),
+                                    bottomLeftCornerRadius = CornerRadius(leftRadius)
+                                )
+                            )
+                            clipPath(pillClipPath) {
+                                this@drawWithContent.drawContent()
+                            }
+                        }
+                    }
+                }
+        )
+    }
+}
+
+@Composable
+private fun NavBarTabContent(
+    icon: ImageVector,
+    label: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val labelStyle = MaterialTheme.typography.labelMedium
+    var labelFontSize by remember(label) { mutableStateOf(labelStyle.fontSize) }
+    var labelReady by remember(label) { mutableStateOf(false) }
+    Column(
+        modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (selected) selectedColor else contentColor,
+            tint = color,
             modifier = Modifier.size(22.dp)
         )
         Text(
             text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = if (selected) selectedColor else contentColor,
-            maxLines = 1
+            style = labelStyle,
+            color = color,
+            fontSize = labelFontSize,
+            maxLines = 1,
+            softWrap = false,
+            onTextLayout = { result ->
+                if (result.hasVisualOverflow && labelFontSize > 6.sp) {
+                    labelFontSize *= 0.9f
+                } else {
+                    labelReady = true
+                }
+            },
+            modifier = Modifier.alpha(if (labelReady) 1f else 0f)
         )
     }
 }

@@ -62,22 +62,6 @@ private val materialTabs = listOf(
 
 @Composable
 fun MaterialSettingsScreen(onBack: () -> Unit) {
-    val context = LocalContext.current
-    val themePrefs = remember { ThemePrefs.get(context) }
-    val currentStyle by themePrefs.materialStyleState
-
-    var selectedTab by remember { mutableIntStateOf(0) }
-    val isFrosted = currentStyle == ThemePrefs.MATERIAL_STYLE_FROSTED
-
-    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val previewRes = if (isDark) {
-        R.drawable.material_preview_dark
-    } else {
-        R.drawable.material_preview
-    }
-
-    val previewBackdrop = rememberLayerBackdrop()
-
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -114,6 +98,34 @@ fun MaterialSettingsScreen(onBack: () -> Unit) {
             )
         }
 
+        MaterialSettingsContent()
+
+        Spacer(Modifier.navigationBarsPadding())
+    }
+}
+
+@Composable
+fun MaterialSettingsContent(modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val themePrefs = remember { ThemePrefs.get(context) }
+    val currentStyle by themePrefs.materialStyleState
+
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val isFrosted = currentStyle == ThemePrefs.MATERIAL_STYLE_FROSTED
+
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val previewRes = if (isDark) {
+        R.drawable.material_preview_dark
+    } else {
+        R.drawable.material_preview
+    }
+
+    val previewBackdrop = rememberLayerBackdrop()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -171,8 +183,6 @@ fun MaterialSettingsScreen(onBack: () -> Unit) {
                 modifier = Modifier.weight(1f)
             )
         }
-
-        Spacer(Modifier.navigationBarsPadding())
     }
 }
 

@@ -15,6 +15,7 @@ object EmbeddedCoverFetcher {
 
     private const val TAG = "EmbeddedCoverFetcher"
     private const val BYTE_CACHE_BYTES = 6 * 1024 * 1024
+    private const val MAX_COVER_BYTES = 24 * 1024 * 1024
     private const val NEGATIVE_CACHE_LIMIT = 512
 
     private val byteCache = object : LruCache<String, ByteArray>(BYTE_CACHE_BYTES) {
@@ -68,7 +69,7 @@ object EmbeddedCoverFetcher {
                         }
                     }
                 }
-                if (data != null && data.isNotEmpty()) {
+                if (data != null && data.isNotEmpty() && data.size <= MAX_COVER_BYTES) {
                     byteCache.put(filePath, data)
                     data
                 } else null
@@ -77,6 +78,9 @@ object EmbeddedCoverFetcher {
             }
         } catch (e: Exception) {
             Log.w(TAG, "extract bytes failed: $filePath - ${e.message}")
+            null
+        } catch (e: OutOfMemoryError) {
+            Log.w(TAG, "extract bytes failed: $filePath - OOM")
             null
         } catch (e: NoClassDefFoundError) {
             null
@@ -121,7 +125,7 @@ object EmbeddedCoverFetcher {
             })
             try {
                 val data = future.get(20, TimeUnit.SECONDS)
-                if (data != null && data.isNotEmpty()) {
+                if (data != null && data.isNotEmpty() && data.size <= MAX_COVER_BYTES) {
                     byteCache.put(url, data)
                     data
                 } else {
