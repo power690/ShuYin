@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +87,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Album
 import com.xiaowei.player.data.Artist
+import com.xiaowei.player.data.ArtistCoverPrefs
 import com.xiaowei.player.data.RecommendCard
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.player.MusicPlayerManager
@@ -484,6 +486,20 @@ fun RecommendDetailScreen(
 ) {
     val songs = card.songs
 
+    val context = LocalContext.current
+
+    val uniqueCovers = rememberUniqueCoverPaths(
+        songs = songs,
+        preferred = songs.firstOrNull()?.data
+    )
+
+    val deckKey = "recommend_" + card.title
+
+    val initialCoverIndex = remember(deckKey, uniqueCovers) {
+        val saved = ArtistCoverPrefs.get(context).getSelectedCover(deckKey)
+        uniqueCovers.indexOf(saved).takeIf { it >= 0 } ?: 0
+    }
+
     var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
     val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
 
@@ -544,17 +560,15 @@ fun RecommendDetailScreen(
             ) {
 
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
-                ) {
-                    RecommendCardItem(
-                        card = card,
-                        fillWidth = true,
-                        cardHeight = 220
-                    )
-                }
+                SwipeDeckHeaderCard(
+                    title = card.title,
+                    subtitle = card.subtitle,
+                    covers = uniqueCovers,
+                    initialIndex = initialCoverIndex,
+                    onCoverChange = { path ->
+                        ArtistCoverPrefs.get(context).setSelectedCover(deckKey, path)
+                    }
+                )
             }
             item { Spacer(Modifier.height(4.dp)) }
 

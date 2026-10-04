@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit
 object EmbeddedCoverFetcher {
 
     private const val TAG = "EmbeddedCoverFetcher"
-    private const val BYTE_CACHE_BYTES = 6 * 1024 * 1024
+    private const val BYTE_CACHE_BYTES = 24 * 1024 * 1024
     private const val MAX_COVER_BYTES = 24 * 1024 * 1024
     private const val NEGATIVE_CACHE_LIMIT = 512
 

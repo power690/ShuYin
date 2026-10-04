@@ -53,11 +53,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaowei.player.LibraryState
+import com.xiaowei.player.data.ArtistCoverPrefs
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
@@ -333,8 +335,17 @@ private fun ArtistsPane(
             key = { artist -> artist.id.toString() + "_" + artist.displayName },
             contentType = { "artist_tile" }
         ) { artist ->
+            val context = LocalContext.current
+            val selectionVersion = ArtistCoverPrefs.get(context).selectionVersionState.value
+            val tileCoverPath = remember(artist, library, selectionVersion) {
+                val saved = ArtistCoverPrefs.get(context).getSelectedCover(artist.displayName)
+                val belongs = saved != null &&
+                    library.artistSongMap[artist.displayName]?.any { it.data == saved } == true
+                if (belongs) saved else artist.firstSongData
+            }
             LibraryArtistTile(
                 artist = artist,
+                coverPath = tileCoverPath,
                 onClick = { onOpenArtist(artist.displayName) }
             )
         }
@@ -390,6 +401,7 @@ private fun AlbumsPane(
 @Composable
 fun LibraryArtistTile(
     artist: com.xiaowei.player.data.Artist,
+    coverPath: String? = null,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -420,7 +432,7 @@ fun LibraryArtistTile(
                 .height(140.dp),
             cornerRadius = 16,
             coverSizePx = 384,
-            filePath = artist.firstSongData
+            filePath = coverPath ?: artist.firstSongData
         )
         Spacer(Modifier.height(8.dp))
         Text(

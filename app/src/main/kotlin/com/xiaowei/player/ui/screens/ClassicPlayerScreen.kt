@@ -394,9 +394,9 @@ fun ClassicPlayerScreen(
                     .background(
                         Brush.verticalGradient(
                             listOf(
-                                Color.Black.copy(alpha = 0.10f),
-                                Color.Black.copy(alpha = 0.20f),
-                                Color.Black.copy(alpha = 0.30f)
+                                Color.Black.copy(alpha = 0.22f),
+                                Color.Black.copy(alpha = 0.30f),
+                                Color.Black.copy(alpha = 0.38f)
                             )
                         )
                     )
