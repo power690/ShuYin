@@ -447,10 +447,14 @@ fun ArtistDetailScreen(
             }
         },
         content = { topBarHeight ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
                 contentPadding = PaddingValues(top = topBarHeight, bottom = 80.dp)
             ) {
@@ -499,6 +503,7 @@ fun ArtistDetailScreen(
                     },
                     onAdd = { onAddSong(song) }
                 )
+            }
             }
             }
         }
@@ -582,10 +587,14 @@ fun AlbumDetailScreen(
             }
         },
         content = { topBarHeight ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
                 contentPadding = PaddingValues(top = topBarHeight, bottom = 80.dp)
             ) {
@@ -634,6 +643,7 @@ fun AlbumDetailScreen(
                     },
                     onAdd = { onAddSong(song) }
                 )
+            }
             }
             }
         }

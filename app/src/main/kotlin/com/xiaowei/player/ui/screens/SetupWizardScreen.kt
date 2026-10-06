@@ -431,10 +431,15 @@ fun SetupWizardScreen(onFinish: () -> Unit) {
         step -= 1
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .statusBarsPadding()
     ) {
         WizardStepDots(step = step, pageCount = pageCount)
@@ -475,6 +480,7 @@ fun SetupWizardScreen(onFinish: () -> Unit) {
             },
             onFinish = onFinish
         )
+    }
     }
 }
 

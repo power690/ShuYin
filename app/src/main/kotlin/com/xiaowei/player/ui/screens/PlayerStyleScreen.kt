@@ -46,9 +46,15 @@ private val STYLE_PREVIEW_RATIO = 0.45f
 
 @Composable
 fun PlayerStyleScreen(onBack: () -> Unit) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
@@ -87,6 +93,7 @@ fun PlayerStyleScreen(onBack: () -> Unit) {
         PlayerStyleContent(
             modifier = Modifier.weight(1f)
         )
+    }
     }
 }
 

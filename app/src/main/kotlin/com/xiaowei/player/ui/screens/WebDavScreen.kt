@@ -1,5 +1,9 @@
 package com.xiaowei.player.ui.screens
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -59,6 +63,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.ContextCompat
 import com.xiaowei.player.data.WebDavAccount
 import com.xiaowei.player.data.WebDavPrefs
 import com.xiaowei.player.i18n.Strings
@@ -77,12 +82,36 @@ fun WebDavScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingAccount by remember { mutableStateOf<WebDavAccount?>(null) }
     var deletingAccount by remember { mutableStateOf<WebDavAccount?>(null) }
+    var pendingActivationId by remember { mutableStateOf<String?>(null) }
     val scrollState = rememberScrollState()
 
-    Column(
+    val localNetworkPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        val id = pendingActivationId
+        pendingActivationId = null
+        if (id != null) {
+            webDavPrefs.setActive(id)
+            onWebDavChanged(true)
+        }
+    }
+
+    fun needsLocalNetworkPermission(): Boolean {
+        return Build.VERSION.SDK_INT >= 37 &&
+            ContextCompat.checkSelfPermission(
+                context, "android.permission.ACCESS_LOCAL_NETWORK"
+            ) != PackageManager.PERMISSION_GRANTED
+    }
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
+    ) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .statusBarsPadding()
     ) {
         Row(
@@ -131,8 +160,19 @@ fun WebDavScreen(
                     switchEnabled = switchEnabled,
                     showDivider = account != accounts.last(),
                     onCheckedChange = { checked ->
-                        webDavPrefs.setActive(if (checked) account.id else null)
-                        onWebDavChanged(checked)
+                        if (checked && needsLocalNetworkPermission()) {
+                            pendingActivationId = account.id
+                            try {
+                                localNetworkPermissionLauncher.launch("android.permission.ACCESS_LOCAL_NETWORK")
+                            } catch (_: Exception) {
+                                pendingActivationId = null
+                                webDavPrefs.setActive(account.id)
+                                onWebDavChanged(true)
+                            }
+                        } else {
+                            webDavPrefs.setActive(if (checked) account.id else null)
+                            onWebDavChanged(checked)
+                        }
                     },
                     onEdit = { editingAccount = account },
                     onDelete = { deletingAccount = account }
@@ -214,6 +254,7 @@ fun WebDavScreen(
                 }
             }
         )
+    }
     }
 }
 

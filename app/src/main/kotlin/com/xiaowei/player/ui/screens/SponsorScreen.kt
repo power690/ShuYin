@@ -45,9 +45,15 @@ import com.xiaowei.player.i18n.Strings
 
 @Composable
 fun SponsorScreen(onBack: () -> Unit) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -92,8 +98,8 @@ fun SponsorScreen(onBack: () -> Unit) {
 
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .widthIn(max = 340.dp)
+                    .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(32.dp))
             ) {
@@ -140,5 +146,6 @@ fun SponsorScreen(onBack: () -> Unit) {
             Spacer(Modifier.height(24.dp))
             Spacer(Modifier.navigationBarsPadding())
         }
+    }
     }
 }

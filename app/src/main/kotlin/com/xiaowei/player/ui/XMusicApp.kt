@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -247,6 +248,18 @@ fun ShuYinApp(
     val useClassicPlayer = playerStyle == com.xiaowei.player.data.ThemePrefs.PLAYER_STYLE_CLASSIC
 
     val systemDarkForBars = androidx.compose.foundation.isSystemInDarkTheme()
+
+    val orientationConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+
+    LaunchedEffect(playerExpanded, orientationConfiguration.smallestScreenWidthDp) {
+        if (!playerExpanded) {
+            val activity = context as? android.app.Activity
+            activity?.requestedOrientation =
+                if (orientationConfiguration.smallestScreenWidthDp >= 600)
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+        }
+    }
 
     LaunchedEffect(playerExpanded) {
         currentView.keepScreenOn = playerExpanded
@@ -570,9 +583,11 @@ fun ShuYinApp(
                             Box(
                                 modifier = Modifier
                                     .align(Alignment.BottomCenter)
+                                    .fillMaxWidth()
                                     .padding(
                                         bottom = systemNavBarHeight + 94.dp
-                                    )
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
                                 MiniPlayerBar(
                                     song = currentSong,

@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -228,19 +229,28 @@ fun RecommendScreen(
                         }
                     }
                 }
-                Column {
-                    HorizontalPager(
-                        state = pagerState,
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        pageSpacing = 20.dp
-                    ) { page ->
-                        val card = library.recommends[page]
-                        RecommendCardItem(
-                            card = card,
-                            onClick = { onOpenRecommendCard(card) },
-                            fillWidth = true,
-                            cardHeight = 200
-                        )
+                val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp >= 600 && it.smallestScreenWidthDp >= 600 }
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        HorizontalPager(
+                            state = pagerState,
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            pageSpacing = 20.dp
+                        ) { page ->
+                            val card = library.recommends[page]
+                            RecommendCardItem(
+                                card = card,
+                                onClick = { onOpenRecommendCard(card) },
+                                fillWidth = true,
+                                cardHeight = if (wideLayout) 400 else 200
+                            )
+                        }
                     }
                 }
         }
@@ -288,8 +298,17 @@ fun RecommendScreen(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     items(library.hotArtists, key = { artist -> artist.id.toString() + "_" + artist.displayName }) { artist ->
+                        val context = LocalContext.current
+                        val selectionVersion = ArtistCoverPrefs.get(context).selectionVersionState.value
+                        val tileCoverPath = remember(artist, library, selectionVersion) {
+                            val saved = ArtistCoverPrefs.get(context).getSelectedCover(artist.displayName)
+                            val belongs = saved != null &&
+                                library.artistSongMap[artist.displayName]?.any { it.data == saved } == true
+                            if (belongs) saved else null
+                        }
                         ArtistTile(
                             artist = artist,
+                            coverPath = tileCoverPath,
                             onClick = { onOpenArtist(artist.displayName) }
                         )
                     }
@@ -432,7 +451,7 @@ fun AlbumTile(album: Album, onClick: () -> Unit) {
 }
 
 @Composable
-fun ArtistTile(artist: Artist, onClick: () -> Unit) {
+fun ArtistTile(artist: Artist, coverPath: String? = null, onClick: () -> Unit) {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -461,7 +480,7 @@ fun ArtistTile(artist: Artist, onClick: () -> Unit) {
                 .height(128.dp),
             cornerRadius = 16,
             coverSizePx = 384,
-            filePath = artist.firstSongData
+            filePath = coverPath ?: artist.firstSongData
         )
         Spacer(Modifier.height(7.dp))
         Text(
@@ -551,10 +570,14 @@ fun RecommendDetailScreen(
             }
         },
         content = { topBarHeight ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
-                    .fillMaxSize()
+                    .fillMaxWidth()
                     .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
                 contentPadding = PaddingValues(top = topBarHeight, bottom = 80.dp)
             ) {
@@ -620,6 +643,7 @@ fun RecommendDetailScreen(
                     onAdd = { onAddSong(song) }
                 )
             }
+        }
         }
         }
         }
@@ -721,11 +745,17 @@ fun SearchScreen(
     var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
     val sortedResults = remember(results, sortOption) { sortSongs(results, sortOption) }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surfaceContainerLow)
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
     ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight()
+        ) {
 
         Surface(
             modifier = Modifier
@@ -933,6 +963,7 @@ fun SearchScreen(
                     )
                 }
             }
+        }
         }
     }
 }

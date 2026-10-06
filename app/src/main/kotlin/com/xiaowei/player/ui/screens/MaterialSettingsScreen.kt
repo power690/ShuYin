@@ -62,9 +62,15 @@ private val materialTabs = listOf(
 
 @Composable
 fun MaterialSettingsScreen(onBack: () -> Unit) {
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surfaceContainerLow),
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+        modifier = Modifier
+            .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainerLow)
             .statusBarsPadding()
     ) {
@@ -101,6 +107,7 @@ fun MaterialSettingsScreen(onBack: () -> Unit) {
         MaterialSettingsContent()
 
         Spacer(Modifier.navigationBarsPadding())
+    }
     }
 }
 

@@ -183,6 +183,10 @@ fun FavoriteScreen(
             }
         },
         content = { topBarHeight ->
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.TopCenter
+            ) {
         if (favoriteSongs.isEmpty()) {
 
             Box(
@@ -198,7 +202,7 @@ fun FavoriteScreen(
                 )
             }
         } else {
-            Column(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxWidth()) {
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -320,6 +324,7 @@ fun FavoriteScreen(
                 }
             }
                 }
+        }
         }
         }
     )

@@ -47,6 +47,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -234,13 +235,15 @@ fun ClassicPlayerScreen(
         val orientationActivity = statusBarView.context as? android.app.Activity
         val resolver = context.contentResolver
         fun applyOrientation() {
+            val largeScreen = orientationConfiguration.smallestScreenWidthDp >= 600
             val locked = android.provider.Settings.System.getInt(
                 resolver,
                 android.provider.Settings.System.ACCELEROMETER_ROTATION,
                 1
             ) == 0
             orientationActivity?.requestedOrientation =
-                if (locked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                if (largeScreen) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                else if (locked) android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
                 else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_USER
         }
         applyOrientation()
@@ -271,7 +274,9 @@ fun ClassicPlayerScreen(
                 }
             } catch (_: Exception) { }
             orientationActivity?.requestedOrientation =
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+                if (orientationConfiguration.smallestScreenWidthDp >= 600)
+                    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
         }
     }
 
@@ -1356,6 +1361,7 @@ fun ClassicPlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth(if (isLandscape) 0.6f else 1f)
+                        .widthIn(max = 560.dp)
                         .fillMaxHeight(if (isLandscape) 0.85f else 0.45f)
                         .clip(if (isLandscape) RoundedCornerShape(24.dp) else RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
                         .background(
@@ -2080,6 +2086,11 @@ private fun ClassicLandscapeContent(
     lyricsInitialized: Boolean,
     onLyricsInitialized: () -> Unit
 ) {
+    val expandedControls = androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp >= 600
+    val sideButtonSize = if (expandedControls) 52.dp else 40.dp
+    val sideIconSize = if (expandedControls) 36.dp else 30.dp
+    val playButtonSize = if (expandedControls) 70.dp else 54.dp
+    val playIconSize = if (expandedControls) 40.dp else 32.dp
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
     val landscapeListState = rememberLazyListState()
     LaunchedEffect(Unit) {
@@ -2102,7 +2113,7 @@ private fun ClassicLandscapeContent(
         label = "LandscapeProgressSlide"
     )
     val buttonBlockHeight by animateDpAsState(
-        targetValue = if (controlsVisible) 54.dp else 0.dp,
+        targetValue = if (controlsVisible) { if (expandedControls) 72.dp else 54.dp } else 0.dp,
         animationSpec = tween(350, easing = FastOutSlowInEasing),
         label = "LandscapeButtonBlockHeight"
     )
@@ -2138,8 +2149,8 @@ private fun ClassicLandscapeContent(
             val coverSize = minOf(
                 leftWidth * 0.88f,
                 maxHeight * 0.70f
-            ).coerceAtMost(300.dp)
-            val landscapeBottomInset = (((maxHeight - coverSize - 12.dp - 28.dp) / 2f) - 14.dp).coerceAtLeast(0.dp)
+            ).coerceAtMost(if (expandedControls) 460.dp else 300.dp)
+            val landscapeBottomInset = ((((maxHeight - coverSize - 12.dp - 28.dp) / 2f) - 14.dp) * (if (expandedControls) 0.35f else 1f)).coerceAtLeast(0.dp)
             Row(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
@@ -2147,20 +2158,7 @@ private fun ClassicLandscapeContent(
                     .fillMaxHeight(),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Card(
-                        modifier = Modifier
-                            .size(coverSize)
-                            .clip(RoundedCornerShape(18.dp)),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                    ) {
-                        ClassicPlayerCover(
-                            modifier = Modifier.fillMaxSize(),
-                            filePath = song.data
-                        )
-                    }
+                val progressBlock: @Composable () -> Unit = @Composable {
                     Box(
                         modifier = Modifier
                             .height(progressBlockHeight)
@@ -2248,6 +2246,33 @@ private fun ClassicLandscapeContent(
                     }
                     }
                 }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Card(
+                        modifier = Modifier
+                            .size(coverSize)
+                            .clip(RoundedCornerShape(18.dp)),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
+                        ClassicPlayerCover(
+                            modifier = Modifier.fillMaxSize(),
+                            filePath = song.data
+                        )
+                    }
+                    if (!expandedControls) {
+                        progressBlock()
+                    }
+                }
+                if (expandedControls) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = landscapeBottomInset + 16.dp)
+                    ) {
+                        progressBlock()
+                    }
+                }
             }
             Spacer(Modifier.width(48.dp))
             Column(
@@ -2261,7 +2286,7 @@ private fun ClassicLandscapeContent(
                 ) {
                     Text(
                         text = song.title,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp, textAlign = TextAlign.Center),
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = if (expandedControls) 24.sp else 18.sp, textAlign = TextAlign.Center),
                         color = Color.White.copy(alpha = 0.9f),
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -2272,7 +2297,7 @@ private fun ClassicLandscapeContent(
                     Spacer(Modifier.height(4.dp))
                     Text(
                         text = song.displayAlbumDashArtist,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp, textAlign = TextAlign.Center),
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = if (expandedControls) 15.sp else 12.sp, textAlign = TextAlign.Center),
                         color = Color.White.copy(alpha = 0.6f),
                         maxLines = 1,
                         softWrap = false,
@@ -2317,20 +2342,20 @@ private fun ClassicLandscapeContent(
                     ) {
                         IconButton(
                             onClick = onPrev,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(sideButtonSize)
                         ) {
                             Icon(
                                 Icons.Filled.SkipPrevious,
                                 Strings.get("previous"),
                                 tint = Color.White,
-                                modifier = Modifier.size(30.dp)
+                                modifier = Modifier.size(sideIconSize)
                             )
                         }
                     }
                     Spacer(Modifier.width(14.dp))
                     Box(
                         modifier = Modifier
-                            .size(54.dp)
+                            .size(playButtonSize)
                             .clickable(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
@@ -2351,7 +2376,7 @@ private fun ClassicLandscapeContent(
                                 imageVector = if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
                                 contentDescription = if (playing) Strings.get("pause") else Strings.get("play"),
                                 tint = Color.White,
-                                modifier = Modifier.size(30.dp)
+                                modifier = Modifier.size(playIconSize)
                             )
                         }
                     }
@@ -2363,19 +2388,19 @@ private fun ClassicLandscapeContent(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
                                 onClick = onNext,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(sideButtonSize)
                             ) {
                                 Icon(
                                     Icons.Filled.SkipNext,
                                     Strings.get("next"),
                                     tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
+                                    modifier = Modifier.size(sideIconSize)
                                 )
                             }
                             Spacer(Modifier.width(14.dp))
                             IconButton(
                                 onClick = onCyclePlayMode,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(sideButtonSize)
                             ) {
                                 val (modeIcon, modeLabelKey, modeTint) = when (playerState.playMode) {
                                     MusicPlayerManager.PlayMode.SEQUENCE -> Triple(
@@ -2395,19 +2420,19 @@ private fun ClassicLandscapeContent(
                                     modeIcon,
                                     Strings.get(modeLabelKey),
                                     tint = modeTint,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(sideIconSize)
                                 )
                             }
                             Spacer(Modifier.width(14.dp))
                             IconButton(
                                 onClick = onShowPlaylist,
-                                modifier = Modifier.size(40.dp)
+                                modifier = Modifier.size(sideButtonSize)
                             ) {
                                 Icon(
                                     Icons.Filled.MoreVert,
                                     Strings.get("playlist"),
                                     tint = Color.White.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(sideIconSize)
                                 )
                             }
                         }

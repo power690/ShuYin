@@ -469,10 +469,15 @@ fun SettingsScreen(
             }
         },
         content = { topBarHeight ->
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier)
+                    .then(if (blurSupported) Modifier.hazeSource(hazeState) else Modifier),
+                contentAlignment = Alignment.TopCenter
+            ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
                     .verticalScroll(scrollState)
                     .padding(top = topBarHeight + 4.dp, bottom = 96.dp)
             ) {
@@ -674,6 +679,7 @@ fun SettingsScreen(
                     com.xiaowei.player.ui.screens.UpdateCheckerState.requestManualCheck()
                 }
             )
+        }
         }
         }
     )

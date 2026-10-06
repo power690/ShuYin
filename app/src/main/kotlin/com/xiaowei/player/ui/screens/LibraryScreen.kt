@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -233,10 +234,15 @@ private fun SongsPane(
         return
     }
     val sortedSongs = remember(songs, sortOption) { sortSongs(songs, sortOption) }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter
+    ) {
     LazyColumn(
         state = listState,
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .fillMaxHeight()
             .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
         contentPadding = PaddingValues(top = topPadding, bottom = bottomPadding)
     ) {
@@ -295,6 +301,7 @@ private fun SongsPane(
             )
         }
     }
+    }
 }
 
 @Composable
@@ -324,7 +331,9 @@ private fun ArtistsPane(
     }
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Adaptive(minSize = 150.dp),
+        columns = GridCells.Adaptive(
+            minSize = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) 180.dp else 150.dp
+        ),
         modifier = Modifier
             .fillMaxSize()
             .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
@@ -379,7 +388,9 @@ private fun AlbumsPane(
     }
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Adaptive(minSize = 150.dp),
+        columns = GridCells.Adaptive(
+            minSize = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) 180.dp else 150.dp
+        ),
         modifier = Modifier
             .fillMaxSize()
             .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),

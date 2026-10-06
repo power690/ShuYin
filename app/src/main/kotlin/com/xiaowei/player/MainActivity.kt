@@ -35,9 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.xiaowei.player.data.DarkModePrefs
@@ -65,6 +65,8 @@ class MainActivity : ComponentActivity() {
 
     private var isSystemDarkTheme by mutableStateOf(false)
 
+    private var currentOrientation by mutableStateOf(Configuration.ORIENTATION_UNDEFINED)
+
     private val darkModePrefs by lazy { DarkModePrefs.get(this) }
 
     private val setupWizardPrefs by lazy { SetupWizardPrefs.get(this) }
@@ -87,6 +89,27 @@ class MainActivity : ComponentActivity() {
         checkAndRequestManageStoragePermission()
     }
 
+    private val localNetworkPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted &&
+            com.xiaowei.player.data.WebDavPrefs.get(this).activeAccount() != null
+        ) {
+            viewModel.refreshFromWebDav()
+        }
+    }
+
+    private fun ensureLocalNetworkPermission() {
+        if (Build.VERSION.SDK_INT < 37) return
+        if (ContextCompat.checkSelfPermission(this, "android.permission.ACCESS_LOCAL_NETWORK")
+            == PackageManager.PERMISSION_GRANTED
+        ) return
+        try {
+            localNetworkPermissionLauncher.launch("android.permission.ACCESS_LOCAL_NETWORK")
+        } catch (_: Exception) {
+        }
+    }
+
     
     private var wasManageStorageGranted = false
 
@@ -104,7 +127,7 @@ class MainActivity : ComponentActivity() {
 
         Locale.setDefault(locale)
 
-        val config = Configuration(newBase.resources.configuration)
+        val config = Configuration()
         config.setLocale(locale)
 
         config.setLayoutDirection(locale)
@@ -127,11 +150,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        requestedOrientation =
+            if (resources.configuration.smallestScreenWidthDp >= 600)
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT
+
         showSplash = savedInstanceState == null
 
         showSetupWizard = !setupWizardPrefs.wizardCompleted
 
         isSystemDarkTheme = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+
+        currentOrientation = resources.configuration.orientation
 
         com.xiaowei.player.data.LocalePrefs.get(this).languageCode?.let {
             com.xiaowei.player.i18n.Strings.setCurrentLanguage(it)
@@ -308,11 +338,14 @@ class MainActivity : ComponentActivity() {
                                         if (effectiveDark) Color(0xFF16161E) else Color(0xFFFCE7DA)
                                     )
                             ) {
+                                val splashBitmap = remember(effectiveDark, currentOrientation) {
+                                    (ContextCompat.getDrawable(
+                                        this@MainActivity,
+                                        if (effectiveDark) R.drawable.splash_dark else R.drawable.splash_light
+                                    ) as android.graphics.drawable.BitmapDrawable).bitmap.asImageBitmap()
+                                }
                                 Image(
-                                    painter = painterResource(
-                                        if (effectiveDark) R.drawable.splash_dark
-                                        else R.drawable.splash_light
-                                    ),
+                                    bitmap = splashBitmap,
                                     contentDescription = null,
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -381,6 +414,7 @@ class MainActivity : ComponentActivity() {
 
     private fun checkPermissionAndLoad() {
         if (com.xiaowei.player.data.WebDavPrefs.get(this).activeAccount() != null) {
+            ensureLocalNetworkPermission()
             viewModel.onPermissionResult(true)
             checkNotificationPermission()
             return
@@ -501,6 +535,13 @@ class MainActivity : ComponentActivity() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         isSystemDarkTheme = (newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        currentOrientation = newConfig.orientation
+        if (showSplash) {
+            window.setBackgroundDrawableResource(
+                if (darkModePrefs.isDarkTheme(isSystemDarkTheme)) R.drawable.splash_window_dark
+                else R.drawable.splash_window_light
+            )
+        }
         reassertSystemBarAppearance()
     }
 
