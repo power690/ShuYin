@@ -85,7 +85,8 @@ data class LyricWord(
 data class LyricLine(
     val timeMs: Long,
     val text: String,
-    val words: List<LyricWord> = emptyList()
+    val words: List<LyricWord> = emptyList(),
+    val translation: String = ""
 ) {
     val isWordByWord: Boolean get() = words.isNotEmpty()
 }

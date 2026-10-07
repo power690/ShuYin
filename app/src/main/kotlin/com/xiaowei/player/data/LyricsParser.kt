@@ -178,7 +178,38 @@ object LyricsParser {
                 }
             }
         }
-        return result.sortedWith(compareBy({ it.timeMs }, { if (isMarkerLine(it)) 0 else 1 }))
+        val sorted = result.sortedWith(compareBy({ it.timeMs }, { if (isMarkerLine(it)) 0 else 1 }))
+        return mergeSameTimeLines(sorted)
+    }
+
+    private fun mergeSameTimeLines(lines: List<LyricLine>): List<LyricLine> {
+        val merged = mutableListOf<LyricLine>()
+        var i = 0
+        while (i < lines.size) {
+            var j = i
+            while (j + 1 < lines.size && lines[i].timeMs >= 0 && lines[j + 1].timeMs == lines[i].timeMs) {
+                j++
+            }
+            if (j == i) {
+                merged.add(lines[i])
+            } else {
+                val group = lines.subList(i, j + 1)
+                val main = group.lastOrNull { it.words.isNotEmpty() } ?: group.last()
+                val translation = group.filter {
+                    it !== main && it.words.isEmpty() && it.text.isNotBlank()
+                }.joinToString("\n") { it.text }
+                merged.add(
+                    LyricLine(
+                        timeMs = main.timeMs,
+                        text = main.text,
+                        words = main.words,
+                        translation = translation
+                    )
+                )
+            }
+            i = j + 1
+        }
+        return merged
     }
 
     private fun isMarkerLine(line: LyricLine): Boolean {

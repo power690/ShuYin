@@ -17,8 +17,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 31
-        versionName = "2.6.0"
+        versionCode = 32
+        versionName = "2.7.0"
         vectorDrawables { useSupportLibrary = true }
 
         externalNativeBuild {
@@ -47,6 +47,7 @@ android {
             isMinifyEnabled = false
             isDebuggable = true
             applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "鼠音测试版"
         }
         release {
 
@@ -57,6 +58,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            manifestPlaceholders["appLabel"] = "@string/app_name"
         }
     }
     compileOptions {

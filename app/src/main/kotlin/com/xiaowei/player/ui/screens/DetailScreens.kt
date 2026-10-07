@@ -76,6 +76,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 @Composable
 fun SwipeDeckHeaderCard(
@@ -133,6 +134,14 @@ fun SwipeDeckHeaderCard(
     val flingTriggerPx = with(density) { 800.dp.toPx() }
     var widthPx by remember { mutableStateOf(0) }
 
+    val deckConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+    val deckMaxHeight = maxOf(240, minOf(420, (deckConfiguration.screenHeightDp * 0.45f).roundToInt()))
+    val deckCardHeight = if (deckConfiguration.screenWidthDp >= 600) {
+        (((deckConfiguration.screenWidthDp - 24) * 0.5f).roundToInt()).coerceIn(240, deckMaxHeight)
+    } else {
+        220
+    }
+
     val dragState = rememberDraggableState { delta ->
         if (count >= 2 && widthPx > 0) {
             val bound = widthPx * 1.15f
@@ -144,7 +153,7 @@ fun SwipeDeckHeaderCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 12.dp)
-            .height(220.dp)
+            .height(deckCardHeight.dp)
             .onSizeChanged { widthPx = it.width }
             .draggable(
                 state = dragState,

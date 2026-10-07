@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,7 +28,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,6 +36,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -48,9 +49,12 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xiaowei.player.data.UserProfileRepository
@@ -81,32 +85,15 @@ private fun MineIconTone.toneContentColor(): Color = when (this) {
 }
 
 @Composable
-private fun MineIconBadge(
-    icon: ImageVector,
-    tone: MineIconTone
-) {
-    Box(
-        modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(tone.toneContainerColor()),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = tone.toneContentColor(),
-            modifier = Modifier.size(20.dp)
-        )
-    }
-}
-
-@Composable
-private fun MineActionItem(
+private fun MineEntryCard(
     icon: ImageVector,
     tone: MineIconTone,
     title: String,
-    showDivider: Boolean = true,
+    iconSize: Dp,
+    titleStyle: TextStyle,
+    valueText: String? = null,
+    modifier: Modifier = Modifier,
+    valueBaseFontSize: Float = 16f,
     onClick: () -> Unit
 ) {
     val interactionSource = remember { MutableInteractionSource() }
@@ -114,44 +101,61 @@ private fun MineActionItem(
     val scale by animateFloatAsState(
         targetValue = if (pressed) 0.96f else 1f,
         animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
-        label = "mineItemScale"
+        label = "mineEntryCardScale"
     )
-    Column(
-        modifier = Modifier
+    var valueFontSize by remember(valueText) { mutableFloatStateOf(valueBaseFontSize) }
+    Row(
+        modifier = modifier
             .fillMaxWidth()
+            .height(72.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
             }
             .clip(RoundedCornerShape(24.dp))
+            .background(tone.toneContainerColor())
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(),
                 onClick = onClick
             )
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = tone.toneContentColor(),
+            modifier = Modifier.size(iconSize)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.Center
         ) {
-            MineIconBadge(icon = icon, tone = tone)
-            Spacer(Modifier.width(12.dp))
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = titleStyle,
+                color = tone.toneContentColor().copy(alpha = 0.72f),
                 fontWeight = FontWeight.Medium,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-        }
-        if (showDivider) {
-            HorizontalDivider(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp),
-                thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
-            )
+            if (valueText != null) {
+                Text(
+                    text = valueText,
+                    fontSize = valueFontSize.sp,
+                    color = tone.toneContentColor(),
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    onTextLayout = { result ->
+                        if (result.hasVisualOverflow) {
+                            valueFontSize = (valueFontSize - 0.5f).coerceAtLeast(12f)
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -160,6 +164,7 @@ private fun MineActionItem(
 fun MineScreen(
     onOpenFavorite: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    favoriteCount: Int = 0,
     bottomPadding: Dp = 168.dp
 ) {
     val context = LocalContext.current
@@ -209,7 +214,7 @@ fun MineScreen(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
                 .graphicsLayer {
                     scaleX = cardScale
                     scaleY = cardScale
@@ -265,21 +270,33 @@ fun MineScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        MineActionItem(
-            icon = Icons.Outlined.FavoriteBorder,
-            tone = MineIconTone.ERROR,
-            title = Strings.get("favorite"),
-            showDivider = false,
-            onClick = { onOpenFavorite() }
-        )
-
-        MineActionItem(
-            icon = Icons.Outlined.Settings,
-            tone = MineIconTone.SECONDARY,
-            title = Strings.get("settings_title"),
-            showDivider = false,
-            onClick = { onOpenSettings() }
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MineEntryCard(
+                icon = Icons.Outlined.FavoriteBorder,
+                tone = MineIconTone.ERROR,
+                title = Strings.get("favorite"),
+                iconSize = 28.dp,
+                titleStyle = MaterialTheme.typography.labelMedium,
+                valueText = Strings.get("library_song_count", favoriteCount),
+                valueBaseFontSize = 16f,
+                modifier = Modifier.weight(1f),
+                onClick = { onOpenFavorite() }
+            )
+            MineEntryCard(
+                icon = Icons.Outlined.Settings,
+                tone = MineIconTone.SECONDARY,
+                title = Strings.get("settings_title"),
+                iconSize = 28.dp,
+                titleStyle = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+                onClick = { onOpenSettings() }
+            )
+        }
     }
 
     if (showEditDialog) {

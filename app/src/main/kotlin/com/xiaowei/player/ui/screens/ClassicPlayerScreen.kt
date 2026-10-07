@@ -1584,19 +1584,12 @@ private fun ClassicLyricsView(
                 )
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
-                ClassicKaraokeLineAndroidView(
-                    text = displayText,
-                    words = if (useKaraoke) line.words else null,
-                    positionMs = lineLivePositionMs,
-                    nextLineTimeMs = nextLineTimeMs,
-                    sungColor = sungColor,
-                    unsungColor = animatedUnsungColor,
-                    dimColor = animatedDimColor,
-                    fontSize = targetSize,
-                    maxFontSize = if (compact) 17f else 20f,
-                    scale = animatedSize / targetSize,
-                    fontWeightValue = if (isCurrent) 700f else 400f,
-                    centered = compact,
+                val animatedTranslationColor by animateColorAsState(
+                    targetValue = Color.White.copy(alpha = if (isCurrent) 0.8f else lineAlpha * 0.85f),
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "classicLyricTranslationColor"
+                )
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
@@ -1607,7 +1600,34 @@ private fun ClassicLyricsView(
                             vertical = if (isBlank) (if (compact) 1.dp else 2.dp) else (if (compact) 4.dp else 8.dp),
                             horizontal = if (compact) 8.dp else 24.dp
                         )
-                )
+                ) {
+                    ClassicKaraokeLineAndroidView(
+                        text = displayText,
+                        words = if (useKaraoke) line.words else null,
+                        positionMs = lineLivePositionMs,
+                        nextLineTimeMs = nextLineTimeMs,
+                        sungColor = sungColor,
+                        unsungColor = animatedUnsungColor,
+                        dimColor = animatedDimColor,
+                        fontSize = targetSize,
+                        maxFontSize = if (compact) 17f else 20f,
+                        scale = animatedSize / targetSize,
+                        fontWeightValue = if (isCurrent) 700f else 400f,
+                        centered = compact,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (!isBlank && line.translation.isNotBlank()) {
+                        Text(
+                            text = line.translation,
+                            fontSize = if (compact) 11.sp else 13.sp,
+                            color = animatedTranslationColor,
+                            textAlign = if (compact) TextAlign.Center else TextAlign.Start,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 1.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -1800,18 +1820,12 @@ private fun ImmersiveLyricsView(
                 )
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
-                ClassicKaraokeLineAndroidView(
-                    text = displayText,
-                    words = if (useKaraoke) line.words else null,
-                    positionMs = lineLivePositionMs,
-                    nextLineTimeMs = nextLineTimeMs,
-                    sungColor = sungColor,
-                    unsungColor = animatedUnsungColor,
-                    dimColor = animatedDimColor,
-                    fontSize = targetSize,
-                    maxFontSize = if (fullScreen) 20f else 18f,
-                    scale = animatedSize / targetSize,
-                    fontWeightValue = if (isCurrent) 700f else 400f,
+                val animatedTranslationColor by animateColorAsState(
+                    targetValue = Color.White.copy(alpha = if (isCurrent) 0.8f else lineAlpha * 0.85f),
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "immersiveLyricTranslationColor"
+                )
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
@@ -1824,7 +1838,32 @@ private fun ImmersiveLyricsView(
                             vertical = if (isBlank) 1.dp else 6.dp,
                             horizontal = 20.dp
                         )
-                )
+                ) {
+                    ClassicKaraokeLineAndroidView(
+                        text = displayText,
+                        words = if (useKaraoke) line.words else null,
+                        positionMs = lineLivePositionMs,
+                        nextLineTimeMs = nextLineTimeMs,
+                        sungColor = sungColor,
+                        unsungColor = animatedUnsungColor,
+                        dimColor = animatedDimColor,
+                        fontSize = targetSize,
+                        maxFontSize = if (fullScreen) 20f else 18f,
+                        scale = animatedSize / targetSize,
+                        fontWeightValue = if (isCurrent) 700f else 400f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (!isBlank && line.translation.isNotBlank()) {
+                        Text(
+                            text = line.translation,
+                            fontSize = if (fullScreen) 13.sp else 12.sp,
+                            color = animatedTranslationColor,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 1.dp)
+                        )
+                    }
+                }
             }
         }
     }

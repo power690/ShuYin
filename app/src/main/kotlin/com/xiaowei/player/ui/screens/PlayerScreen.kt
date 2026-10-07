@@ -989,19 +989,13 @@ private fun LyricsView(
                 )
                 val nextLineTimeMs = if (i + 1 < lines.size) lines[i + 1].timeMs else (line.timeMs + 4000L)
                 val displayText = if (isBlank) "♪" else line.text
+                val animatedTranslationColor by animateColorAsState(
+                    targetValue = if (isCurrent) primaryColor.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.4f),
+                    animationSpec = tween(400, easing = FastOutSlowInEasing),
+                    label = "lyricTranslationColor"
+                )
 
-                KaraokeLineAndroidView(
-                    text = displayText,
-                    words = if (useKaraoke) line.words else null,
-                    positionMs = lineLivePositionMs,
-                    nextLineTimeMs = nextLineTimeMs,
-                    sungColor = sungColor,
-                    unsungColor = animatedUnsungColor,
-                    dimColor = animatedDimColor,
-                    fontSize = targetSize,
-                    maxFontSize = 21f,
-                    scale = animatedSize / targetSize,
-                    fontWeightValue = if (isCurrent) 700f else 400f,
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable(
@@ -1012,7 +1006,33 @@ private fun LyricsView(
                             vertical = if (isBlank) 2.dp else 8.dp,
                             horizontal = 24.dp
                         )
-                )
+                ) {
+                    KaraokeLineAndroidView(
+                        text = displayText,
+                        words = if (useKaraoke) line.words else null,
+                        positionMs = lineLivePositionMs,
+                        nextLineTimeMs = nextLineTimeMs,
+                        sungColor = sungColor,
+                        unsungColor = animatedUnsungColor,
+                        dimColor = animatedDimColor,
+                        fontSize = targetSize,
+                        maxFontSize = 21f,
+                        scale = animatedSize / targetSize,
+                        fontWeightValue = if (isCurrent) 700f else 400f,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (!isBlank && line.translation.isNotBlank()) {
+                        Text(
+                            text = line.translation,
+                            fontSize = 14.sp,
+                            color = animatedTranslationColor,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }

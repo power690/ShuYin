@@ -110,6 +110,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Calendar
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 @Composable
@@ -229,7 +230,13 @@ fun RecommendScreen(
                         }
                     }
                 }
-                val wideLayout = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp >= 600 && it.smallestScreenWidthDp >= 600 }
+                val heroConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
+                val heroMaxHeight = maxOf(320, minOf(460, (heroConfiguration.screenHeightDp * 0.5f).roundToInt()))
+                val heroCardHeight = if (heroConfiguration.screenWidthDp >= 600) {
+                    (((heroConfiguration.screenWidthDp - 32) * 0.5f).roundToInt()).coerceIn(320, heroMaxHeight)
+                } else {
+                    200
+                }
                 Box(
                     modifier = Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
@@ -248,7 +255,7 @@ fun RecommendScreen(
                                 card = card,
                                 onClick = { onOpenRecommendCard(card) },
                                 fillWidth = true,
-                                cardHeight = if (wideLayout) 400 else 200
+                                cardHeight = heroCardHeight
                             )
                         }
                     }

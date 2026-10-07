@@ -573,6 +573,9 @@ fun ShuYinApp(
                                     Tab.Mine -> MineScreen(
                                         onOpenFavorite = { requestDetail(Detail.Favorite) },
                                         onOpenSettings = { requestDetail(Detail.Settings) },
+                                        favoriteCount = remember(library.songs, library.favoriteIds) {
+                                            library.songs.count { library.favoriteIds.contains(it.id) }
+                                        },
                                         bottomPadding = bottomReserved + 88.dp
                                     )
                                 }
