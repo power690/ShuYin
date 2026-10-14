@@ -69,6 +69,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
@@ -680,10 +681,17 @@ fun SearchScreen(
 
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val rootView = androidx.compose.ui.platform.LocalView.current
 
     fun hideKeyboardAndClearFocus() {
         keyboardController?.hide()
         focusManager.clearFocus()
+        try {
+            val imm = context.getSystemService(android.content.Context.INPUT_METHOD_SERVICE)
+                as? android.view.inputmethod.InputMethodManager
+            imm?.hideSoftInputFromWindow(rootView.windowToken, 0)
+        } catch (_: Exception) {
+        }
     }
 
     var history by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -722,8 +730,7 @@ fun SearchScreen(
 
     LaunchedEffect(isActive) {
         if (!isActive) {
-            keyboardController?.hide()
-            focusManager.clearFocus()
+            hideKeyboardAndClearFocus()
         }
     }
 
@@ -731,8 +738,7 @@ fun SearchScreen(
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                keyboardController?.hide()
-                focusManager.clearFocus()
+                hideKeyboardAndClearFocus()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -792,7 +798,8 @@ fun SearchScreen(
                     },
                     modifier = Modifier
                         .weight(1f)
-                        .focusRequester(focusRequester),
+                        .focusRequester(focusRequester)
+                        .focusProperties { canFocus = isActive },
                     placeholder = {
                         Text(
                             text = Strings.get("search_hint"),

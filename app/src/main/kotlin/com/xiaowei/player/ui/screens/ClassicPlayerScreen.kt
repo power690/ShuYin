@@ -333,8 +333,16 @@ fun ClassicPlayerScreen(
                 val b = wm.maximumWindowMetrics.bounds
                 maxOf(b.width(), b.height())
             } else {
-                val dm = context.resources.displayMetrics
-                maxOf(dm.widthPixels, dm.heightPixels)
+                val realDm = android.util.DisplayMetrics()
+                val wm = context.getSystemService(android.content.Context.WINDOW_SERVICE) as android.view.WindowManager
+                @Suppress("DEPRECATION")
+                wm.defaultDisplay?.getRealMetrics(realDm)
+                if (realDm.widthPixels > 0 && realDm.heightPixels > 0) {
+                    maxOf(realDm.widthPixels, realDm.heightPixels)
+                } else {
+                    val dm = context.resources.displayMetrics
+                    maxOf(dm.widthPixels, dm.heightPixels)
+                }
             }
             maxPx.toDp()
         }

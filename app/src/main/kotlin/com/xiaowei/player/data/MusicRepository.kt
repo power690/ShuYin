@@ -153,8 +153,9 @@ class MusicRepository(private val context: Context) {
             Log.e(TAG, "Failed to query MediaStore", e)
         }
 
-        Log.i(TAG, "Loaded ${songs.size} songs from MediaStore")
-        songs
+        val deduped = dedupeSongs(songs)
+        Log.i(TAG, "Loaded ${deduped.size} songs from MediaStore")
+        deduped
     }
 
     suspend fun loadMusicFromPath(rootPath: String): List<Song> = withContext(Dispatchers.IO) {
@@ -200,8 +201,9 @@ class MusicRepository(private val context: Context) {
             Log.e(TAG, "Failed to scan custom path: $rootPath", e)
         }
 
-        Log.i(TAG, "Loaded ${songs.size} songs from custom path: $rootPath")
-        songs
+        val deduped = dedupeSongs(songs)
+        Log.i(TAG, "Loaded ${deduped.size} songs from custom path: $rootPath")
+        deduped
     }
 
     private fun readSongFromFile(file: File): Song? {
@@ -775,5 +777,46 @@ class MusicRepository(private val context: Context) {
         private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
         private const val CACHE_VERSION = 1
         private const val CACHE_FILE_NAME = ".music_scan_cache"
+        private val COPY_SUFFIX_REGEX = Regex(""" \(\d+\)(\.[^.]+)?$""")
+
+        fun dedupeSongs(songs: List<Song>): List<Song> {
+            if (songs.size < 2) return songs
+            val groups = LinkedHashMap<String, MutableList<Song>>()
+            for (song in songs) {
+                val key = if (song.size > 0L && song.duration > 0L) {
+                    buildString {
+                        append(song.title.trim().lowercase())
+                        append('\u0000')
+                        append(song.artist.trim().lowercase())
+                        append('\u0000')
+                        append(song.album.trim().lowercase())
+                        append('\u0000')
+                        append(song.duration)
+                        append('\u0000')
+                        append(song.size)
+                    }
+                } else {
+                    '\u0001' + song.data
+                }
+                groups.getOrPut(key) { mutableListOf() }.add(song)
+            }
+            if (groups.size == songs.size) return songs
+            val result = ArrayList<Song>(groups.size)
+            for (group in groups.values) {
+                if (group.size == 1) {
+                    result.add(group[0])
+                } else {
+                    result.add(
+                        group.minWith(
+                            compareBy(
+                                { song -> if (COPY_SUFFIX_REGEX.containsMatchIn(song.data.substringAfterLast('/'))) 1 else 0 },
+                                { song -> song.dateAdded }
+                            )
+                        )
+                    )
+                }
+            }
+            return result
+        }
     }
 }

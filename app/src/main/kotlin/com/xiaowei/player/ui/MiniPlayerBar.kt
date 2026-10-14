@@ -6,9 +6,13 @@ import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.basicMarquee
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,13 +30,16 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -132,10 +139,35 @@ fun MiniPlayerBar(
     onNext: () -> Unit,
     onClick: () -> Unit,
     glassBackdrop: Backdrop? = null,
-    forceFrosted: Boolean = false
+    forceFrosted: Boolean = false,
+    md3: Boolean = false,
+    positionMs: Long = 0,
+    durationMs: Long = 0,
+    onSeek: (Long) -> Unit = {}
 ) {
 
-    if (glassBackdrop != null && LiquidGlassEnabled) {
+    if (md3) {
+        Surface(
+            onClick = onClick,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainer
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Md3MiniPlayerContent(
+                    song = song,
+                    isPlaying = isPlaying,
+                    onPlayPause = onPlayPause,
+                    onPrev = onPrev,
+                    onNext = onNext
+                )
+                Md3MiniProgress(
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    onSeek = onSeek
+                )
+            }
+        }
+    } else if (glassBackdrop != null && LiquidGlassEnabled) {
         val glassShape = RoundedCornerShape(34.dp)
         val fullEffects = !forceFrosted && LiquidGlassFullEffects
         val midEffects = forceFrosted || LiquidGlassMidEffects
@@ -342,6 +374,152 @@ private fun MiniPlayerContent(
             icon = Icons.Filled.SkipNext,
             description = Strings.get("next"),
             tint = MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+private fun Md3MiniPlayerContent(
+    song: Song,
+    isPlaying: Boolean,
+    onPlayPause: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AlbumCover(
+            modifier = Modifier.size(44.dp),
+            cornerRadius = 8,
+            filePath = song.data
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = song.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = song.displayAlbumDashArtist,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.basicMarquee(iterations = Int.MAX_VALUE)
+            )
+        }
+        IconButton(
+            onClick = onPrev,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SkipPrevious,
+                contentDescription = Strings.get("previous"),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+        IconButton(
+            onClick = onPlayPause,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                contentDescription = if (isPlaying) Strings.get("pause") else Strings.get("play"),
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(26.dp)
+            )
+        }
+        IconButton(
+            onClick = onNext,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.SkipNext,
+                contentDescription = Strings.get("next"),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun Md3MiniProgress(
+    positionMs: Long,
+    durationMs: Long,
+    onSeek: (Long) -> Unit
+) {
+    var dragFraction by remember { mutableStateOf<Float?>(null) }
+    val fraction = dragFraction
+        ?: (if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f)
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(20.dp)
+    ) {
+        val widthPx = constraints.maxWidth.toFloat()
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .pointerInput(durationMs) {
+                    detectTapGestures { offset ->
+                        if (widthPx > 0f && durationMs > 0) {
+                            val f = (offset.x / widthPx).coerceIn(0f, 1f)
+                            onSeek((f * durationMs).toLong())
+                        }
+                    }
+                }
+                .pointerInput(durationMs) {
+                    detectHorizontalDragGestures(
+                        onDragStart = { offset ->
+                            if (widthPx > 0f && durationMs > 0) {
+                                dragFraction = (offset.x / widthPx).coerceIn(0f, 1f)
+                            }
+                        },
+                        onDragEnd = {
+                            dragFraction?.let { f -> onSeek((f * durationMs).toLong()) }
+                            dragFraction = null
+                        },
+                        onDragCancel = { dragFraction = null }
+                    ) { change, _ ->
+                        change.consume()
+                        if (widthPx > 0f && durationMs > 0) {
+                            dragFraction = (change.position.x / widthPx).coerceIn(0f, 1f)
+                        }
+                    }
+                }
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)
+                )
+        )
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth(fraction)
+                .height(4.dp)
+                .background(
+                    MaterialTheme.colorScheme.primary,
+                    RoundedCornerShape(topStart = 2.dp, topEnd = 2.dp)
+                )
         )
     }
 }

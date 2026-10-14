@@ -63,6 +63,7 @@ import com.xiaowei.player.navkit.supportsHardwareBlur
 import com.xiaowei.player.player.MusicPlayerManager
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.xiaowei.player.ui.LiquidGlassNavBar
 import com.xiaowei.player.ui.screens.AlbumDetailScreen
 import com.xiaowei.player.ui.screens.ArtistDetailScreen
 import com.xiaowei.player.ui.screens.EmptyScanScreen
@@ -80,6 +81,7 @@ import com.xiaowei.player.ui.screens.SearchScreen
 import com.xiaowei.player.ui.screens.SettingsScreen
 import com.xiaowei.player.ui.screens.SponsorScreen
 import com.xiaowei.player.ui.screens.MaterialSettingsScreen
+import com.xiaowei.player.ui.screens.NavBarSettingsScreen
 import com.xiaowei.player.ui.screens.WebDavScreen
 import com.xiaowei.player.data.WebDavClient
 import kotlinx.coroutines.delay
@@ -103,6 +105,7 @@ sealed class Detail {
     object Favorite : Detail()
     object Settings : Detail()
     object MaterialSettings : Detail()
+    object NavBarSettings : Detail()
     object PlayerStyle : Detail()
     object Sponsor : Detail()
     object WebDav : Detail()
@@ -243,6 +246,9 @@ fun ShuYinApp(
     val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
     val userMaterialStyle by themePrefs.materialStyleState
     val materialFrosted = userMaterialStyle == com.xiaowei.player.data.ThemePrefs.MATERIAL_STYLE_FROSTED
+    val userNavBarStyle by themePrefs.navBarStyleState
+    val isMd3Nav = userNavBarStyle != com.xiaowei.player.data.ThemePrefs.NAV_BAR_STYLE_MINIMAL ||
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.S
     val playerStyle by themePrefs.playerStyleState
 
     val useClassicPlayer = playerStyle == com.xiaowei.player.data.ThemePrefs.PLAYER_STYLE_CLASSIC
@@ -427,7 +433,11 @@ fun ShuYinApp(
 
         val showMiniPlayer = currentSong != null && !playerExpanded && !inDetail
         val bottomReserved: Dp =
-            systemNavBarHeight + (if (showMiniPlayer) 176.dp else 90.dp)
+            if (isMd3Nav) {
+                systemNavBarHeight + (if (showMiniPlayer) 156.dp else 80.dp)
+            } else {
+                systemNavBarHeight + (if (showMiniPlayer) 176.dp else 90.dp)
+            }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -446,22 +456,38 @@ fun ShuYinApp(
                         }
 
                         if (!playerExpanded) {
-                            LiquidGlassNavBar(
-                                backdrop = permBackdrop,
-                                tabs = tabs.map { it.icon to it.labelKey },
-                                selectedTabIndex = { mainPagerState.targetPage },
-                                onTabSelected = { index ->
-                                    if (mainPagerState.currentPage != index) {
-                                        mainScope.launch {
-                                            mainPagerState.animateScrollToPage(index)
+                            if (isMd3Nav) {
+                                Md3NavBar(
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.targetPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
+                                            }
                                         }
-                                    }
-                                },
-                                forceFrosted = materialFrosted,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = systemNavBarHeight + 24.dp)
-                            )
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                )
+                            } else {
+                                LiquidGlassNavBar(
+                                    backdrop = permBackdrop,
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.targetPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
+                                            }
+                                        }
+                                    },
+                                    forceFrosted = materialFrosted,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = systemNavBarHeight + 24.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -583,54 +609,104 @@ fun ShuYinApp(
                         }
 
                         if (currentSong != null && !playerExpanded) {
-                            Box(
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .padding(
-                                        bottom = systemNavBarHeight + 94.dp
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                MiniPlayerBar(
-                                    song = currentSong,
-                                    isPlaying = playerState.isPlaying,
-                                    onPlayPause = onTogglePlayPause,
-                                    onPrev = onSkipPrev,
-                                    onNext = onSkipNext,
-                                    onClick = { playerExpanded = true },
-                                    glassBackdrop = contentBackdrop,
-                                    forceFrosted = materialFrosted
-                                )
+                            if (isMd3Nav) {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .padding(
+                                            bottom = systemNavBarHeight + 80.dp
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    MiniPlayerBar(
+                                        song = currentSong,
+                                        isPlaying = playerState.isPlaying,
+                                        onPlayPause = onTogglePlayPause,
+                                        onPrev = onSkipPrev,
+                                        onNext = onSkipNext,
+                                        onClick = { playerExpanded = true },
+                                        md3 = true,
+                                        positionMs = playerState.positionMs,
+                                        durationMs = playerState.durationMs,
+                                        onSeek = onSeek
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .fillMaxWidth()
+                                        .padding(
+                                            bottom = systemNavBarHeight + 94.dp
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    MiniPlayerBar(
+                                        song = currentSong,
+                                        isPlaying = playerState.isPlaying,
+                                        onPlayPause = onTogglePlayPause,
+                                        onPrev = onSkipPrev,
+                                        onNext = onSkipNext,
+                                        onClick = { playerExpanded = true },
+                                        glassBackdrop = contentBackdrop,
+                                        forceFrosted = materialFrosted
+                                    )
+                                }
                             }
                         }
 
                         if (!playerExpanded) {
-                            LiquidGlassNavBar(
-                                backdrop = contentBackdrop,
-                                tabs = tabs.map { it.icon to it.labelKey },
-                                selectedTabIndex = { mainPagerState.targetPage },
-                                onTabSelected = { index ->
-                                    if (mainPagerState.currentPage != index) {
-                                        mainScope.launch {
-                                            mainPagerState.animateScrollToPage(index)
+                            if (isMd3Nav) {
+                                Md3NavBar(
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.targetPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
+                                            }
                                         }
-                                    }
-                                    if (detail != Detail.None) {
-                                        popDetail()
-                                    }
-                                },
-                                onTabReselected = { index ->
-                                    val tab = tabs.getOrNull(index)
-                                    if (tab == Tab.Recommend || tab == Tab.Library) {
-                                        onRefresh()
-                                    }
-                                },
-                                forceFrosted = materialFrosted,
-                                modifier = Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .padding(bottom = systemNavBarHeight + 24.dp)
-                            )
+                                        if (detail != Detail.None) {
+                                            popDetail()
+                                        }
+                                    },
+                                    onTabReselected = { index ->
+                                        val tab = tabs.getOrNull(index)
+                                        if (tab == Tab.Recommend || tab == Tab.Library) {
+                                            onRefresh()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                )
+                            } else {
+                                LiquidGlassNavBar(
+                                    backdrop = contentBackdrop,
+                                    tabs = tabs.map { it.icon to it.labelKey },
+                                    selectedTabIndex = { mainPagerState.targetPage },
+                                    onTabSelected = { index ->
+                                        if (mainPagerState.currentPage != index) {
+                                            mainScope.launch {
+                                                mainPagerState.animateScrollToPage(index)
+                                            }
+                                        }
+                                        if (detail != Detail.None) {
+                                            popDetail()
+                                        }
+                                    },
+                                    onTabReselected = { index ->
+                                        val tab = tabs.getOrNull(index)
+                                        if (tab == Tab.Recommend || tab == Tab.Library) {
+                                            onRefresh()
+                                        }
+                                    },
+                                    forceFrosted = materialFrosted,
+                                    modifier = Modifier
+                                        .align(Alignment.BottomCenter)
+                                        .padding(bottom = systemNavBarHeight + 24.dp)
+                                )
+                            }
                         }
                     }
 
@@ -693,6 +769,7 @@ fun ShuYinApp(
                                         }
                                     },
                                     onOpenMaterialSettings = { requestDetail(Detail.MaterialSettings) },
+                                    onOpenNavBarSettings = { requestDetail(Detail.NavBarSettings) },
                                     onOpenPlayerStyle = { requestDetail(Detail.PlayerStyle) },
                                     onOpenSponsor = { requestDetail(Detail.Sponsor) },
                                     onOpenWebDav = { requestDetail(Detail.WebDav) }
@@ -702,6 +779,9 @@ fun ShuYinApp(
                                     onWebDavChanged = onWebDavChanged
                                 )
                                 Detail.MaterialSettings -> MaterialSettingsScreen(
+                                    onBack = { popDetail() }
+                                )
+                                Detail.NavBarSettings -> NavBarSettingsScreen(
                                     onBack = { popDetail() }
                                 )
                                 Detail.PlayerStyle -> PlayerStyleScreen(

@@ -52,7 +52,7 @@ class WebDavMusicSource(private val context: Context) {
         if (!forceRescan) {
             val cached = loadCache(account)
             if (cached.isNotEmpty()) {
-                val cachedSongs = cached.values.map { it.song }
+                val cachedSongs = MusicRepository.dedupeSongs(cached.values.map { it.song })
                 return@withContext ScanResult(cachedSongs, WebDavClient.ERROR_NONE)
             }
         }
@@ -123,8 +123,9 @@ class WebDavMusicSource(private val context: Context) {
             saveCache(account, songs, collected)
         }
 
-        Log.i(TAG, "WebDav loaded ${songs.size} songs from ${account.name}")
-        ScanResult(songs, WebDavClient.ERROR_NONE)
+        val deduped = MusicRepository.dedupeSongs(songs)
+        Log.i(TAG, "WebDav loaded ${deduped.size} songs from ${account.name}")
+        ScanResult(deduped, WebDavClient.ERROR_NONE)
     }
 
     suspend fun fetchLyricsFor(account: WebDavAccount, song: Song): String? = withContext(Dispatchers.IO) {

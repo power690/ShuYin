@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ColorLens
+import androidx.compose.material.icons.outlined.ViewDay
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -84,8 +86,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import com.xiaowei.player.BuildConfig
 import com.xiaowei.player.data.AudioMixPrefs
+import com.xiaowei.player.data.BackupManager
 import com.xiaowei.player.data.CustomPathPrefs
 import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LocalePrefs
@@ -98,6 +102,10 @@ import com.xiaowei.player.ui.components.blurTopBar
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.rememberHazeState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 private enum class SettingIconTone {
     PRIMARY, SECONDARY, TERTIARY, ERROR, NEUTRAL
@@ -314,6 +322,7 @@ fun SettingsScreen(
     onCustomPathConfirm: (String) -> Unit = {},
     onToggleMixWithOthers: (Boolean) -> Unit = {},
     onOpenMaterialSettings: () -> Unit = {},
+    onOpenNavBarSettings: () -> Unit = {},
     onOpenPlayerStyle: () -> Unit = {},
     onOpenSponsor: () -> Unit = {},
     onOpenWebDav: () -> Unit = {}
@@ -379,6 +388,15 @@ fun SettingsScreen(
                 ).show()
             }
         }
+    }
+
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var backingUp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    val backupShareLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        BackupManager.cleanupShareDir(context)
     }
 
     fun onNativeFilePickerClick() {
@@ -538,12 +556,23 @@ fun SettingsScreen(
                 )
             }
 
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                ExpressiveSettingItem(
+                    icon = Icons.Outlined.ViewDay,
+                    tone = SettingIconTone.SECONDARY,
+                    title = Strings.get("nav_bar_settings_title"),
+                    onClick = { onOpenNavBarSettings() }
+                )
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val navBarStyle = themePrefs.navBarStyleState.value
                 ExpressiveSettingItem(
                     icon = Icons.Outlined.Wallpaper,
                     tone = SettingIconTone.TERTIARY,
                     title = Strings.get("settings_material_settings"),
                     showDivider = false,
+                    itemEnabled = navBarStyle == ThemePrefs.NAV_BAR_STYLE_MINIMAL,
                     onClick = { onOpenMaterialSettings() }
                 )
             }
@@ -590,6 +619,57 @@ fun SettingsScreen(
                 tone = SettingIconTone.SECONDARY,
                 title = Strings.get("settings_webdav"),
                 onClick = { onOpenWebDav() }
+            )
+
+            ExpressiveSettingItem(
+                icon = Icons.Outlined.SettingsBackupRestore,
+                tone = SettingIconTone.TERTIARY,
+                title = Strings.get("settings_backup_restore"),
+                subtitle = Strings.get("settings_backup_restore_desc"),
+                itemEnabled = !backingUp,
+                onClick = {
+                    if (!backingUp) {
+                        backingUp = true
+                        scope.launch(Dispatchers.IO) {
+                            val backupFile = BackupManager.newBackupFile(context)
+                            val created = BackupManager.createBackup(context, backupFile)
+                            withContext(Dispatchers.Main) {
+                                backingUp = false
+                                if (created && backupFile.exists()) {
+                                    try {
+                                        val uri = FileProvider.getUriForFile(
+                                            context,
+                                            context.packageName + ".fileprovider",
+                                            backupFile
+                                        )
+                                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                            type = "application/zip"
+                                            putExtra(Intent.EXTRA_STREAM, uri)
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        backupShareLauncher.launch(
+                                            Intent.createChooser(shareIntent, backupFile.name)
+                                        )
+                                    } catch (e: Exception) {
+                                        BackupManager.cleanupShareDir(context)
+                                        Toast.makeText(
+                                            context,
+                                            Strings.get("system_not_supported"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    }
+                                } else {
+                                    backupFile.delete()
+                                    Toast.makeText(
+                                        context,
+                                        Strings.get("system_not_supported"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        }
+                    }
+                }
             )
 
             ExpressiveSettingItem(

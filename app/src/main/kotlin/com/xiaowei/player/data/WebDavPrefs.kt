@@ -25,8 +25,10 @@ data class WebDavAccount(
         }
 
     fun authHeader(): String {
-        val token = java.util.Base64.getEncoder()
-            .encodeToString("$username:$password".toByteArray(Charsets.UTF_8))
+        val token = android.util.Base64.encodeToString(
+            "$username:$password".toByteArray(Charsets.UTF_8),
+            android.util.Base64.NO_WRAP
+        )
         return "Basic $token"
     }
 }

@@ -1,7 +1,10 @@
 package com.xiaowei.player.ui.screens
 
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
@@ -50,6 +53,7 @@ import androidx.compose.material.icons.outlined.ColorLens
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.SettingsBackupRestore
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -82,21 +86,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaowei.player.R
 import com.xiaowei.player.data.AudioMixPrefs
+import com.xiaowei.player.data.BackupManager
 import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.data.LocalePrefs
 import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.ui.components.M3ExpressiveSwitch
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
+import java.io.File
 
 private enum class WizardPage {
-    LANGUAGE, THEME, MATERIAL, PLAYER_STYLE, PLAYBACK, WELCOME
+    LANGUAGE, BACKUP_RESTORE, THEME, NAV_BAR, MATERIAL, PLAYER_STYLE, PLAYBACK, WELCOME
 }
 
-private fun wizardPageList(): List<WizardPage> = buildList {
+private fun wizardPageList(navBarStyle: String): List<WizardPage> = buildList {
     add(WizardPage.LANGUAGE)
+    add(WizardPage.BACKUP_RESTORE)
     add(WizardPage.THEME)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        add(WizardPage.NAV_BAR)
+    }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        navBarStyle == ThemePrefs.NAV_BAR_STYLE_MINIMAL
+    ) {
         add(WizardPage.MATERIAL)
     }
     add(WizardPage.PLAYER_STYLE)
@@ -420,16 +432,24 @@ private fun WizardColorBall(
 }
 
 @Composable
-fun SetupWizardScreen(onFinish: () -> Unit) {
-    val pages = remember { wizardPageList() }
+fun SetupWizardScreen(onFinish: (File?) -> Unit) {
+    val context = LocalContext.current
+    val themePrefs = remember { ThemePrefs.get(context) }
+    val navBarStyle by themePrefs.navBarStyleState
+    val pages = remember(navBarStyle) { wizardPageList(navBarStyle) }
     val pageCount = pages.size
     var step by rememberSaveable { mutableIntStateOf(0) }
     var navDirection by remember { mutableIntStateOf(1) }
+    var pendingBackup by remember { androidx.compose.runtime.mutableStateOf<File?>(null) }
 
-    BackHandler(enabled = step > 0) {
+    val navigateBack = {
         navDirection = -1
         step -= 1
+        pendingBackup?.delete()
+        pendingBackup = null
     }
+
+    BackHandler(enabled = step > 0) { navigateBack() }
 
     Box(
         modifier = Modifier
@@ -459,8 +479,16 @@ fun SetupWizardScreen(onFinish: () -> Unit) {
         ) { currentStep ->
             when (pages[currentStep]) {
                 WizardPage.LANGUAGE -> WizardLanguagePage()
+                WizardPage.BACKUP_RESTORE -> WizardBackupRestorePage(
+                    onBackupImported = { backupFile ->
+                        pendingBackup = backupFile
+                        navDirection = 1
+                        step = pages.size - 1
+                    }
+                )
                 WizardPage.THEME -> WizardThemePage()
                 WizardPage.MATERIAL -> WizardMaterialPage()
+                WizardPage.NAV_BAR -> WizardNavBarPage()
                 WizardPage.PLAYER_STYLE -> WizardPlayerStylePage()
                 WizardPage.PLAYBACK -> WizardPlaybackPage()
                 WizardPage.WELCOME -> WizardWelcomePage()
@@ -470,15 +498,12 @@ fun SetupWizardScreen(onFinish: () -> Unit) {
         WizardBottomBar(
             step = step,
             pageCount = pageCount,
-            onPrev = {
-                navDirection = -1
-                step -= 1
-            },
+            onPrev = navigateBack,
             onNext = {
                 navDirection = 1
                 step += 1
             },
-            onFinish = onFinish
+            onFinish = { onFinish(pendingBackup) }
         )
     }
     }
@@ -696,6 +721,73 @@ private fun WizardThemePage() {
 }
 
 @Composable
+private fun WizardBackupRestorePage(onBackupImported: (File) -> Unit) {
+    val context = LocalContext.current
+    val backupPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            val copied = BackupManager.copyToTemp(context, uri)
+            if (copied != null && copied.exists() && BackupManager.isShuYinBackup(copied)) {
+                onBackupImported(copied)
+            } else {
+                copied?.delete()
+                Toast.makeText(
+                    context,
+                    Strings.get("backup_not_app_toast"),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    WizardPageFrame(
+        title = Strings.get("settings_backup_restore"),
+        desc = Strings.get("wizard_step_backup_desc")
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentAlignment = Alignment.Center
+        ) {
+            Button(
+                onClick = {
+                    try {
+                        backupPicker.launch(
+                            arrayOf(
+                                "application/zip",
+                                "application/octet-stream",
+                                "application/x-zip-compressed"
+                            )
+                        )
+                    } catch (_: Exception) {
+                        Toast.makeText(
+                            context,
+                            Strings.get("system_not_supported"),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                },
+                shape = RoundedCornerShape(20.dp),
+                contentPadding = PaddingValues(horizontal = 24.dp, vertical = 14.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.SettingsBackupRestore,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = Strings.get("backup_import_button"),
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun WizardMaterialPage() {
     WizardPageFrame(
         title = Strings.get("material_settings_title"),
@@ -708,6 +800,24 @@ private fun WizardMaterialPage() {
                 .verticalScroll(rememberScrollState())
         ) {
             MaterialSettingsContent()
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun WizardNavBarPage() {
+    WizardPageFrame(
+        title = Strings.get("nav_bar_settings_title"),
+        desc = Strings.get("wizard_step_nav_bar_desc")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+        ) {
+            NavBarSettingsContent()
             Spacer(Modifier.height(16.dp))
         }
     }

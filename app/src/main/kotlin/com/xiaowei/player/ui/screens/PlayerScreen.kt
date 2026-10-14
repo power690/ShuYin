@@ -634,11 +634,11 @@ fun PlayerScreen(
                             )
                             MusicPlayerManager.PlayMode.SHUFFLE -> Triple(
                                 Icons.Filled.Shuffle, "play_mode_shuffle",
-                                MaterialTheme.colorScheme.primary
+                                MaterialTheme.colorScheme.onBackground
                             )
                             MusicPlayerManager.PlayMode.REPEAT_ONE -> Triple(
                                 Icons.Filled.RepeatOne, "play_mode_repeat_one",
-                                MaterialTheme.colorScheme.primary
+                                MaterialTheme.colorScheme.onBackground
                             )
                         }
                         val label = Strings.get(labelKey)
@@ -1633,11 +1633,11 @@ private fun MD3LandscapeContent(
                                             )
                                             MusicPlayerManager.PlayMode.SHUFFLE -> Triple(
                                                 Icons.Filled.Shuffle, "play_mode_shuffle",
-                                                MaterialTheme.colorScheme.primary
+                                                MaterialTheme.colorScheme.onBackground
                                             )
                                             MusicPlayerManager.PlayMode.REPEAT_ONE -> Triple(
                                                 Icons.Filled.RepeatOne, "play_mode_repeat_one",
-                                                MaterialTheme.colorScheme.primary
+                                                MaterialTheme.colorScheme.onBackground
                                             )
                                         }
                                         Icon(

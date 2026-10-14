@@ -11,10 +11,20 @@ class ThemePrefs private constructor(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val themeColorIndexState = mutableStateOf(prefs.getInt(KEY_THEME_COLOR_INDEX, DEFAULT_THEME_COLOR_INDEX))
-    val dynamicColorEnabledState = mutableStateOf(prefs.getBoolean(KEY_DYNAMIC_COLOR, false))
+    val dynamicColorEnabledState = mutableStateOf(
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S &&
+            prefs.getBoolean(KEY_DYNAMIC_COLOR, false)
+    )
     val coverColorEnabledState = mutableStateOf(prefs.getBoolean(KEY_COVER_COLOR, false))
     val coverColorState = mutableStateOf<Int?>(null)
     val materialStyleState = mutableStateOf(prefs.getString(KEY_MATERIAL_STYLE, DEFAULT_MATERIAL_STYLE) ?: DEFAULT_MATERIAL_STYLE)
+    val navBarStyleState = mutableStateOf(
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+            prefs.getString(KEY_NAV_BAR_STYLE, DEFAULT_NAV_BAR_STYLE) ?: DEFAULT_NAV_BAR_STYLE
+        } else {
+            NAV_BAR_STYLE_MD3
+        }
+    )
     val playerStyleState = mutableStateOf(
         (prefs.getString(KEY_PLAYER_STYLE, DEFAULT_PLAYER_STYLE) ?: DEFAULT_PLAYER_STYLE).let {
             if (it == PLAYER_STYLE_IMMERSIVE) PLAYER_STYLE_CLASSIC else it
@@ -78,6 +88,13 @@ class ThemePrefs private constructor(context: Context) {
             notifyColorChanged()
         }
 
+    var navBarStyle: String
+        get() = navBarStyleState.value
+        set(value) {
+            navBarStyleState.value = value
+            prefs.edit().putString(KEY_NAV_BAR_STYLE, value).apply()
+        }
+
     var playerStyle: String
         get() = playerStyleState.value
         set(value) {
@@ -107,12 +124,16 @@ class ThemePrefs private constructor(context: Context) {
         private const val KEY_DYNAMIC_COLOR = "dynamic_color_enabled"
         private const val KEY_COVER_COLOR = "cover_color_enabled"
         private const val KEY_MATERIAL_STYLE = "material_style"
+        private const val KEY_NAV_BAR_STYLE = "nav_bar_style"
         private const val KEY_PLAYER_STYLE = "player_style"
         private const val KEY_IMMERSIVE_LYRICS = "immersive_lyrics"
         private const val KEY_LAST_PRIMARY_COLOR = "last_primary_color"
         const val MATERIAL_STYLE_LIQUID = "liquid"
         const val MATERIAL_STYLE_FROSTED = "frosted"
         const val DEFAULT_MATERIAL_STYLE = MATERIAL_STYLE_LIQUID
+        const val NAV_BAR_STYLE_MD3 = "md3"
+        const val NAV_BAR_STYLE_MINIMAL = "minimal"
+        const val DEFAULT_NAV_BAR_STYLE = NAV_BAR_STYLE_MD3
         const val PLAYER_STYLE_MD3 = "md3"
         const val PLAYER_STYLE_CLASSIC = "classic"
         const val PLAYER_STYLE_IMMERSIVE = "immersive"

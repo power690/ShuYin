@@ -249,7 +249,13 @@ class MainActivity : ComponentActivity() {
                     ) {
                         if (showSetupWizard) {
                             SetupWizardScreen(
-                                onFinish = {
+                                onFinish = { backupFile: java.io.File? ->
+                                    if (backupFile != null && backupFile.exists() &&
+                                        com.xiaowei.player.data.BackupManager.restoreBackup(this@MainActivity, backupFile)
+                                    ) {
+                                        com.xiaowei.player.data.BackupManager.restartApp(this@MainActivity)
+                                        return@SetupWizardScreen
+                                    }
                                     setupWizardPrefs.wizardCompleted = true
                                     showSetupWizard = false
                                     try {

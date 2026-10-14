@@ -2,4 +2,5 @@
 <paths>
     <files-path name="updates" path="updates/" />
     <external-path name="music" path="." />
+    <cache-path name="backups" path="backup_share/" />
 </paths>

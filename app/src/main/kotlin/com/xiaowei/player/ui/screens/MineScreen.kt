@@ -170,7 +170,7 @@ fun MineScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val profileRepo = remember { UserProfileRepository(AppDatabase.get(context)) }
+    val profileRepo = remember { UserProfileRepository(context, AppDatabase.get(context)) }
     var userName by remember { mutableStateOf(Strings.get("mine_user")) }
     var avatarUri by remember { mutableStateOf<Uri?>(null) }
     var showEditDialog by remember { mutableStateOf(false) }
