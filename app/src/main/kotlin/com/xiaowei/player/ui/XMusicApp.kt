@@ -602,6 +602,7 @@ fun ShuYinApp(
                                         favoriteCount = remember(library.songs, library.favoriteIds) {
                                             library.songs.count { library.favoriteIds.contains(it.id) }
                                         },
+                                        songCount = library.songs.size,
                                         bottomPadding = bottomReserved + 88.dp
                                     )
                                 }

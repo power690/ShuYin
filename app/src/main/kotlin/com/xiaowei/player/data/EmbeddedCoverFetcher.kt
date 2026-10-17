@@ -143,9 +143,10 @@ object EmbeddedCoverFetcher {
 
     suspend fun preloadPlayingCovers(
         currentFilePath: String?,
-        nextFilePath: String?
+        nextFilePath: String?,
+        prevFilePath: String? = null
     ) = withContext(Dispatchers.IO) {
-        listOfNotNull(currentFilePath, nextFilePath).forEach { path ->
+        listOfNotNull(currentFilePath, nextFilePath, prevFilePath).forEach { path ->
             if (path.isNotBlank()) {
                 try {
                     loadCoverBytes(path)

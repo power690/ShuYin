@@ -103,27 +103,47 @@ class UserProfileRepository(private val context: Context, private val db: AppDat
 
     private val dao get() = db.userProfileDao()
 
+    enum class UserLevel { NORMAL, ADVANCED, SUPREME }
+
     data class UserProfile(
         val name: String,
-        val avatarUri: Uri?
+        val avatarUri: Uri?,
+        val level: UserLevel,
+        val loginStreak: Int,
+        val hasCustomName: Boolean = false
     )
+
+    private fun resolveLevel(entity: UserProfileEntity?): UserLevel {
+        if (entity == null) return UserLevel.NORMAL
+        if (entity.profileCompletedAt == null) {
+            if (canBecomeAdvanced(entity)) {
+                dao.updateProfileCompletedAtSync(System.currentTimeMillis())
+                com.xiaowei.player.ShuYinApp.instance.loginPlaybackGate.onEligibilityChanged()
+                return UserLevel.ADVANCED
+            }
+            return UserLevel.NORMAL
+        }
+        return if (entity.loginStreak >= SUPREME_LOGIN_DAYS) UserLevel.SUPREME else UserLevel.ADVANCED
+    }
 
     fun getSync(): UserProfile {
         val entity = dao.getSync()
+        val level = resolveLevel(entity)
         val name = entity?.name?.takeIf { it.isNotBlank() } ?: Strings.get("mine_user")
         val avatar = entity?.avatarUri
             ?.let { runCatching { Uri.parse(it) }.getOrNull() }
             ?.let { resolveAvatar(context, it) }
-        return UserProfile(name = name, avatarUri = avatar)
+        return UserProfile(name = name, avatarUri = avatar, level = level, loginStreak = entity?.loginStreak ?: 0, hasCustomName = !entity?.name.isNullOrBlank())
     }
 
     suspend fun get(): UserProfile {
         val entity = dao.get()
+        val level = resolveLevel(entity)
         val name = entity?.name?.takeIf { it.isNotBlank() } ?: Strings.get("mine_user")
         val avatar = entity?.avatarUri
             ?.let { runCatching { Uri.parse(it) }.getOrNull() }
             ?.let { resolveAvatar(context, it) }
-        return UserProfile(name = name, avatarUri = avatar)
+        return UserProfile(name = name, avatarUri = avatar, level = level, loginStreak = entity?.loginStreak ?: 0, hasCustomName = !entity?.name.isNullOrBlank())
     }
 
     fun saveNameSync(name: String) {
@@ -177,6 +197,20 @@ fun readUserName(context: Context): String {
     val entity = db.userProfileDao().getSync()
     val saved = entity?.name
     return if (saved.isNullOrBlank()) Strings.get("mine_user") else saved
+}
+
+fun updateSongCountSnapshot(context: Context, count: Int) {
+    val dao = AppDatabase.get(context).userProfileDao()
+    val entity = dao.getSync()
+    if (entity == null) {
+        if (count > 0) {
+            dao.upsertSync(UserProfileEntity(id = 0, name = "", songCount = count))
+        }
+        return
+    }
+    if (entity.songCount != count) {
+        dao.updateSongCountSync(count)
+    }
 }
 
 fun writeUserName(context: Context, name: String) {

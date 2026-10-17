@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
@@ -52,6 +53,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.SwipeDown
+import androidx.compose.material.icons.filled.SwipeUp
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.MoreVert
@@ -173,6 +176,10 @@ fun ClassicPlayerScreen(
     }
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { com.xiaowei.player.data.ThemePrefs.get(context) }
+    val classicTutorialPrefs = remember { com.xiaowei.player.data.ClassicTutorialPrefs.get(context) }
+    var tutorialActive by remember { mutableStateOf(!classicTutorialPrefs.tutorialDone) }
+    var tutorialUpCount by remember { mutableStateOf(0) }
+    var tutorialDownCount by remember { mutableStateOf(0) }
     val immersiveLyrics = themePrefs.immersiveLyricsState.value
     val controlsVisible = !(immersiveLyrics && showLyrics) && !controlsHiddenByGesture
     val orientationConfiguration = androidx.compose.ui.platform.LocalConfiguration.current
@@ -297,9 +304,11 @@ fun ClassicPlayerScreen(
                 }
             }
             val nextSong = playlist.getOrNull(playerState.currentIndex + 1)
+            val prevSongToPreload = playlist.getOrNull(playerState.currentIndex - 1)
             com.xiaowei.player.data.EmbeddedCoverFetcher.preloadPlayingCovers(
                 currentFilePath = song.data,
-                nextFilePath = nextSong?.data
+                nextFilePath = nextSong?.data,
+                prevFilePath = prevSongToPreload?.data
             )
             lastPreloadedSongId = song.id
         }
@@ -350,21 +359,36 @@ fun ClassicPlayerScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds()
-                .pointerInput(showLyrics, playerStage, isLandscape) {
+                .pointerInput(showLyrics, playerStage, isLandscape, tutorialActive) {
                     if (!showLyrics && !isLandscape) {
                         var totalDrag = 0f
                         detectVerticalDragGestures(
                             onDragStart = { totalDrag = 0f },
                             onDragEnd = {
                                 if (totalDrag < -60f) {
-                                    if (playerStage == 0) {
+                                    if (tutorialActive && tutorialUpCount < 2) {
+                                        tutorialUpCount += 1
+                                        playerStage = 1
+                                        controlsHiddenByGesture = tutorialUpCount >= 2
+                                    } else if (playerStage == 0) {
                                         controlsHiddenByGesture = false
                                         playerStage = 1
                                     } else {
                                         controlsHiddenByGesture = true
                                     }
                                 } else if (totalDrag > 60f) {
-                                    if (controlsHiddenByGesture) {
+                                    if (tutorialActive && tutorialUpCount >= 2 && tutorialDownCount < 2) {
+                                        tutorialDownCount += 1
+                                        if (tutorialDownCount >= 2) {
+                                            playerStage = 0
+                                            controlsHiddenByGesture = false
+                                            classicTutorialPrefs.tutorialDone = true
+                                            tutorialActive = false
+                                        } else {
+                                            playerStage = 1
+                                            controlsHiddenByGesture = false
+                                        }
+                                    } else if (controlsHiddenByGesture) {
                                         controlsHiddenByGesture = false
                                     } else if (playerStage == 1) {
                                         playerStage = 0
@@ -1404,6 +1428,15 @@ fun ClassicPlayerScreen(
                 }
             }
         }
+
+        if (tutorialActive && !isLandscape) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.5f))
+            )
+            ClassicTutorialArrow(awaitingDown = tutorialUpCount >= 2)
+        }
     }
 }
 
@@ -2136,6 +2169,8 @@ private fun ClassicLandscapeContent(
     val expandedControls = androidx.compose.ui.platform.LocalConfiguration.current.smallestScreenWidthDp >= 600
     val sideButtonSize = if (expandedControls) 52.dp else 40.dp
     val sideIconSize = if (expandedControls) 36.dp else 30.dp
+    val playModeButtonSize = if (expandedControls) 40.dp else 32.dp
+    val playModeIconSize = if (expandedControls) 26.dp else 22.dp
     val playButtonSize = if (expandedControls) 70.dp else 54.dp
     val playIconSize = if (expandedControls) 40.dp else 32.dp
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
@@ -2447,7 +2482,7 @@ private fun ClassicLandscapeContent(
                             Spacer(Modifier.width(14.dp))
                             IconButton(
                                 onClick = onCyclePlayMode,
-                                modifier = Modifier.size(sideButtonSize)
+                                modifier = Modifier.size(playModeButtonSize)
                             ) {
                                 val (modeIcon, modeLabelKey, modeTint) = when (playerState.playMode) {
                                     MusicPlayerManager.PlayMode.SEQUENCE -> Triple(
@@ -2467,7 +2502,7 @@ private fun ClassicLandscapeContent(
                                     modeIcon,
                                     Strings.get(modeLabelKey),
                                     tint = modeTint,
-                                    modifier = Modifier.size(sideIconSize)
+                                    modifier = Modifier.size(playModeIconSize)
                                 )
                             }
                             Spacer(Modifier.width(14.dp))
@@ -2621,6 +2656,45 @@ private fun ImmersivePlayerCover(
                         .size(96.dp)
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ClassicTutorialArrow(awaitingDown: Boolean) {
+    val animOffset = remember { Animatable(0f) }
+    val animAlpha = remember { Animatable(0f) }
+    LaunchedEffect(awaitingDown) {
+        while (true) {
+            val startDp = if (awaitingDown) -50f else 150f
+            val endDp = if (awaitingDown) 130f else -120f
+            animOffset.snapTo(startDp)
+            animAlpha.snapTo(0f)
+            launch {
+                animAlpha.animateTo(1f, tween(180))
+            }
+            animOffset.animateTo(
+                endDp,
+                tween(durationMillis = 1100, easing = FastOutSlowInEasing)
+            )
+            animAlpha.animateTo(0f, tween(260))
+            delay(750)
+        }
+    }
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        if (animAlpha.value > 0.01f) {
+            Icon(
+                imageVector = if (awaitingDown) Icons.Filled.SwipeDown else Icons.Filled.SwipeUp,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(92.dp)
+                    .offset { androidx.compose.ui.unit.IntOffset(0, animOffset.value.dp.roundToPx()) }
+                    .graphicsLayer { alpha = animAlpha.value }
+            )
         }
     }
 }

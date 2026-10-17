@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
@@ -46,8 +49,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -73,7 +80,14 @@ private fun MineIconTone.toneContainerColor(): Color = when (this) {
     MineIconTone.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
     MineIconTone.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
     MineIconTone.TERTIARY -> MaterialTheme.colorScheme.tertiaryContainer
-    MineIconTone.ERROR -> MaterialTheme.colorScheme.errorContainer
+    MineIconTone.ERROR -> {
+        val base = MaterialTheme.colorScheme.errorContainer
+        if (MaterialTheme.colorScheme.background.luminance() < 0.5f) {
+            lerp(base, MaterialTheme.colorScheme.surfaceContainerLow, 0.40f)
+        } else {
+            base
+        }
+    }
 }
 
 @Composable
@@ -161,10 +175,99 @@ private fun MineEntryCard(
 }
 
 @Composable
+private fun MineProfileCard(
+    userName: String,
+    avatarUri: Uri?,
+    userLevel: UserProfileRepository.UserLevel,
+    scale: Float,
+    interactionSource: MutableInteractionSource,
+    onLevelClick: () -> Unit,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
+            .clip(RoundedCornerShape(32.dp))
+            .background(MineIconTone.SECONDARY.toneContainerColor())
+            .clickable(
+                interactionSource = interactionSource,
+                indication = ripple(),
+                onClick = onClick
+            )
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = Color.Transparent,
+            modifier = Modifier.size(60.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val av = avatarUri
+                if (av != null) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(av)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = Strings.get("mine_avatar"),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(CircleShape),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Person,
+                        contentDescription = Strings.get("mine_avatar"),
+                        tint = MineIconTone.SECONDARY.toneContentColor(),
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.size(14.dp))
+        Column {
+            Text(
+                text = userName,
+                style = MaterialTheme.typography.titleLarge,
+                color = MineIconTone.SECONDARY.toneContentColor(),
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = when (userLevel) {
+                    UserProfileRepository.UserLevel.NORMAL -> Strings.get("user_level_normal")
+                    UserProfileRepository.UserLevel.ADVANCED -> Strings.get("user_level_advanced")
+                    UserProfileRepository.UserLevel.SUPREME -> Strings.get("user_level_supreme")
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MineIconTone.SECONDARY.toneContentColor().copy(alpha = 0.72f),
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onLevelClick
+                )
+            )
+        }
+    }
+}
+
+@Composable
 fun MineScreen(
     onOpenFavorite: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
     favoriteCount: Int = 0,
+    songCount: Int = 0,
     bottomPadding: Dp = 168.dp
 ) {
     val context = LocalContext.current
@@ -173,12 +276,17 @@ fun MineScreen(
     val profileRepo = remember { UserProfileRepository(context, AppDatabase.get(context)) }
     var userName by remember { mutableStateOf(Strings.get("mine_user")) }
     var avatarUri by remember { mutableStateOf<Uri?>(null) }
+    var userLevel by remember { mutableStateOf(UserProfileRepository.UserLevel.NORMAL) }
+    var hasCustomName by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
+    var showBenefitsDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(songCount) {
         val profile = withContext(Dispatchers.IO) { profileRepo.get() }
         userName = profile.name
         avatarUri = profile.avatarUri
+        userLevel = profile.level
+        hasCustomName = profile.hasCustomName
     }
 
     val cardInteraction = remember { MutableInteractionSource() }
@@ -211,62 +319,15 @@ fun MineScreen(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 22.dp, end = 16.dp, top = 10.dp, bottom = 10.dp)
-                .graphicsLayer {
-                    scaleX = cardScale
-                    scaleY = cardScale
-                }
-                .clip(RoundedCornerShape(24.dp))
-                .clickable(
-                    interactionSource = cardInteraction,
-                    indication = ripple(),
-                    onClick = { showEditDialog = true }
-                ),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(60.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val av = avatarUri
-                    if (av != null) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(context)
-                                .data(av)
-                                .crossfade(true)
-                                .build(),
-                            contentDescription = Strings.get("mine_avatar"),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(CircleShape),
-                            contentScale = ContentScale.Crop
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Filled.Person,
-                            contentDescription = Strings.get("mine_avatar"),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(36.dp)
-                        )
-                    }
-                }
-            }
-            Spacer(Modifier.size(14.dp))
-            Text(
-                text = userName,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+        MineProfileCard(
+            userName = if (hasCustomName) userName else Strings.get("mine_user"),
+            avatarUri = avatarUri,
+            userLevel = userLevel,
+            scale = cardScale,
+            interactionSource = cardInteraction,
+            onLevelClick = { showBenefitsDialog = true },
+            onClick = { showEditDialog = true }
+        )
 
         Spacer(Modifier.height(8.dp))
 
@@ -301,7 +362,7 @@ fun MineScreen(
 
     if (showEditDialog) {
         EditProfileDialog(
-            initialName = userName,
+            initialName = if (hasCustomName) userName else "",
             initialAvatarUri = avatarUri,
             onDismiss = { showEditDialog = false },
             onConfirm = { newName, newAvatarUri ->
@@ -313,10 +374,183 @@ fun MineScreen(
                     val profile = withContext(Dispatchers.IO) { profileRepo.get() }
                     userName = profile.name
                     avatarUri = profile.avatarUri
+                    userLevel = profile.level
+                    hasCustomName = profile.hasCustomName
                     showEditDialog = false
                 }
             }
         )
     }
+
+    if (showBenefitsDialog) {
+        UserBenefitsDialog(
+            onDismiss = { showBenefitsDialog = false }
+        )
+    }
+    }
+}
+
+@Composable
+private fun UserBenefitsDialog(
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            modifier = Modifier
+                .padding(horizontal = 32.dp)
+                .widthIn(max = 520.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(28.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shadowElevation = 8.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(24.dp)
+            ) {
+                Text(
+                    text = Strings.get("user_benefits_title"),
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(14.dp))
+                Text(
+                    text = Strings.get("user_level_normal"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_normal_bullets"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = Strings.get("user_level_advanced"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_advanced_1"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_advanced_gate"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_advanced_req_1"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_advanced_req_2"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    text = Strings.get("user_level_supreme"),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_supreme_1"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_supreme_2"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_supreme_gate"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u2022 " + Strings.get("user_benefits_checkin_title"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_checkin_1"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_checkin_2"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_checkin_3"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Text(
+                    text = "\u00b7 " + Strings.get("user_benefits_checkin_4"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 12.dp)
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    text = Strings.get("user_benefits_feedback"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = Strings.get("user_benefits_qq_group"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(18.dp))
+                Button(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        text = Strings.get("user_benefits_got_it"),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+        }
     }
 }

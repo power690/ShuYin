@@ -119,6 +119,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val hotAlbums = albums.shuffled().take(10)
             val hotArtists = artists.shuffled().take(10)
 
+            if (!(webDavAccount != null && songs.isEmpty())) {
+                com.xiaowei.player.data.updateSongCountSnapshot(getApplication(), songs.size)
+            }
+
             _library.value = _library.value.copy(
                 isLoading = false,
                 permissionGranted = true,

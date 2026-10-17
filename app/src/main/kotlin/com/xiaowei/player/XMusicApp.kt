@@ -9,6 +9,7 @@ import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
 import com.xiaowei.player.data.EmbeddedCoverFetcher
 import com.xiaowei.player.data.FavoriteRepository
+import com.xiaowei.player.data.LoginPlaybackGate
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.PlaybackPrefs
 import com.xiaowei.player.data.WebDavMusicSource
@@ -16,6 +17,11 @@ import com.xiaowei.player.data.WebDavPrefs
 import com.xiaowei.player.data.db.AppDatabase
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.i18n.Strings
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 
 class ShuYinApp : Application(), ImageLoaderFactory {
 
@@ -54,6 +60,42 @@ class ShuYinApp : Application(), ImageLoaderFactory {
         )
         createNotificationChannel()
         purgeCoverCaches()
+        registerLoginPlaybackGate()
+    }
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    val loginPlaybackGate = LoginPlaybackGate(this, appScope)
+
+    private fun registerLoginPlaybackGate() {
+        var startedActivityCount = 0
+        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: android.app.Activity) {
+                startedActivityCount++
+                loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
+            }
+
+            override fun onActivityStopped(activity: android.app.Activity) {
+                startedActivityCount--
+                if (startedActivityCount < 0) startedActivityCount = 0
+                loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
+            }
+
+            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+
+            override fun onActivityResumed(activity: android.app.Activity) {}
+
+            override fun onActivityPaused(activity: android.app.Activity) {}
+
+            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+
+            override fun onActivityDestroyed(activity: android.app.Activity) {}
+        })
+        appScope.launch {
+            playerManager.state.collect { state ->
+                loginPlaybackGate.onPlaybackStateChanged(state.isPlaying || state.isBuffering)
+            }
+        }
     }
 
     private fun purgeCoverCaches() {

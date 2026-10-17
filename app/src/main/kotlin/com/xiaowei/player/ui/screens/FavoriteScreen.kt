@@ -59,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Song
@@ -377,13 +378,36 @@ private fun FavoriteSongRow(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(Modifier.height(2.dp))
-            Text(
-                text = song.displayAlbumDashArtist,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                song.quality?.let { quality ->
+                    Text(
+                        text = quality,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontSize = 9.sp,
+                        lineHeight = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 0.5.sp,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        maxLines = 1,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.primaryContainer)
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
+                Text(
+                    text = song.displayAlbumDashArtist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
         if (!showCheck) {
             Spacer(Modifier.width(6.dp))

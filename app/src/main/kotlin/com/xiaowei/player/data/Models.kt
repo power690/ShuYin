@@ -33,7 +33,8 @@ data class Song(
     val mimeType: String? = null,
     val size: Long = 0,
 
-    val source: String = "mediastore"
+    val source: String = "mediastore",
+    val quality: String? = null
 ) {
     val hasLyrics: Boolean get() = !lyrics.isNullOrBlank()
 

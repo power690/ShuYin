@@ -31,4 +31,28 @@ interface UserProfileDao {
 
     @Query("UPDATE user_profile SET avatarUri = :uri WHERE id = 0")
     fun updateAvatarUriSync(uri: String?)
+
+    @Query("UPDATE user_profile SET profileCompletedAt = :ts WHERE id = 0")
+    suspend fun updateProfileCompletedAt(ts: Long?)
+
+    @Query("UPDATE user_profile SET profileCompletedAt = :ts WHERE id = 0")
+    fun updateProfileCompletedAtSync(ts: Long?)
+
+    @Query("UPDATE user_profile SET loginStreak = :streak WHERE id = 0")
+    suspend fun updateLoginStreak(streak: Int)
+
+    @Query("UPDATE user_profile SET loginStreak = :streak WHERE id = 0")
+    fun updateLoginStreakSync(streak: Int)
+
+    @Query("UPDATE user_profile SET lastLoginDay = :day WHERE id = 0")
+    suspend fun updateLastLoginDay(day: Long?)
+
+    @Query("UPDATE user_profile SET lastLoginDay = :day WHERE id = 0")
+    fun updateLastLoginDaySync(day: Long?)
+
+    @Query("UPDATE user_profile SET songCount = :count WHERE id = 0")
+    suspend fun updateSongCount(count: Int)
+
+    @Query("UPDATE user_profile SET songCount = :count WHERE id = 0")
+    fun updateSongCountSync(count: Int)
 }

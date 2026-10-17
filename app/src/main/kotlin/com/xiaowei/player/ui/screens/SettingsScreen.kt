@@ -716,9 +716,24 @@ fun SettingsScreen(
                 title = Strings.get("mine_help_feedback"),
                 valueText = qqGroupNumber,
                 onClick = {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText(Strings.get("mine_qq_group"), qqGroupNumber))
-                    Toast.makeText(context, Strings.get("mine_qq_copied", qqGroupNumber), Toast.LENGTH_SHORT).show()
+                    val qqLink = "mqqapi://card/show_pslcard?src_type=internal&version=1&uin=" + qqGroupNumber + "&card_type=group&source=qrcode"
+                    val webLink = "https://qun.qq.com/universal-share/share?ac=1&authKey=zu4G1I6kw8xIcPq6sM8hANYN2Nu5qm6ZAiS0mvqmCm2%2F3CaGUlBwVdFo0Dbery8E&busi_data=eyJncm91cENvZGUiOiI3NjczMDEyNTEiLCJ0b2tlbiI6InVGZjFOZ0ROOWJDREhFWGNWMmZDblBhamhHTGt4NWJEK21kUFQ4TUxBS1RrVzQ1d2JKekw0TmhFbHZGNWxhVUEiLCJ1aW4iOiIyMTAzODkwMDE4In0%3D&data=DFGaUHCtPiOU6AbZWrEoNTfYTiWhtbBhKifeNcr8NgoyQc2uTOFipZENypjriLGH6PDcHHOagmS0p-HThXBtew&svctype=4&tempid=h5_group_info"
+                    try {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(qqLink)).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                    } catch (_: Exception) {
+                        try {
+                            context.startActivity(
+                                Intent(Intent.ACTION_VIEW, Uri.parse(webLink)).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            )
+                        } catch (_: Exception) {
+                        }
+                    }
                 }
             )
 

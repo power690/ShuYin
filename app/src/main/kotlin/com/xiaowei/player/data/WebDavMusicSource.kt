@@ -313,6 +313,8 @@ class WebDavMusicSource(private val context: Context) {
         val albumId = "$finalArtist|$finalAlbum".hashCode().toLong() and 0xFFFFFFFFL
         val artistId = finalArtist.hashCode().toLong() and 0xFFFFFFFFL
 
+        val quality = resolveRemoteQuality(account, davFile, duration)
+
         return Song(
             id = id,
             title = finalTitle,
@@ -329,8 +331,35 @@ class WebDavMusicSource(private val context: Context) {
             lyrics = lyrics?.takeIf { it.isNotBlank() },
             mimeType = mimeType,
             size = davFile.sizeBytes,
-            source = "webdav"
+            source = "webdav",
+            quality = quality
         )
+    }
+
+    private fun resolveRemoteQuality(
+        account: WebDavAccount,
+        davFile: DavFileEntry,
+        durationMs: Long
+    ): String? {
+        if (davFile.ext !in QUALITY_EXTS) return null
+        return try {
+            val head = downloadRange(davFile.url, account, QUALITY_HEAD_BYTES) ?: return null
+            var quality = AudioQualityParser.parse(head, davFile.ext, davFile.sizeBytes, durationMs)
+            if (quality == null &&
+                (davFile.ext == "m4a" || davFile.ext == "mp4") &&
+                davFile.sizeBytes > QUALITY_HEAD_BYTES
+            ) {
+                val tailLen = minOf(QUALITY_TAIL_BYTES.toLong(), davFile.sizeBytes - QUALITY_HEAD_BYTES).toInt()
+                val tailStart = davFile.sizeBytes - tailLen
+                val tail = WebDavClient.downloadRangeBytes(account, davFile.url, tailStart, tailLen)
+                if (tail != null) {
+                    quality = AudioQualityParser.parse(tail, davFile.ext, davFile.sizeBytes, durationMs)
+                }
+            }
+            quality
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun downloadText(url: String, account: WebDavAccount): String? {
@@ -618,6 +647,7 @@ class WebDavMusicSource(private val context: Context) {
         writeString(dos, song.mimeType)
         dos.writeLong(song.size)
         writeString(dos, song.source)
+        writeString(dos, song.quality)
     }
 
     private fun readSong(dis: DataInputStream): Song {
@@ -638,6 +668,7 @@ class WebDavMusicSource(private val context: Context) {
         val mimeType = readString(dis)
         val size = dis.readLong()
         val source = readString(dis) ?: "webdav"
+        val quality = readString(dis)
         return Song(
             id = id,
             title = title,
@@ -655,7 +686,8 @@ class WebDavMusicSource(private val context: Context) {
             lyrics = lyrics,
             mimeType = mimeType,
             size = size,
-            source = source
+            source = source,
+            quality = quality
         )
     }
 
@@ -717,12 +749,15 @@ class WebDavMusicSource(private val context: Context) {
         private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
         private const val SCAN_PARALLELISM = 8
         private const val CACHE_MAGIC = 0x57444156
-        private const val CACHE_VERSION = 3
+        private const val CACHE_VERSION = 4
         private const val CACHE_PREFIX = ".webdav_scan_cache_"
         private const val FLAC_HEAD_FIRST = 4096
         private const val FLAC_HEAD_MAX = 2097152
         private const val MP3_HEAD_FIRST = 65536
         private const val MP3_HEAD_MAX = 2097152
+        private const val QUALITY_HEAD_BYTES = 65536
+        private const val QUALITY_TAIL_BYTES = 1048576
+        private val QUALITY_EXTS = setOf("flac", "wav", "ape", "mp3", "m4a", "mp4", "ogg", "oga", "opus", "aac")
     }
 }
 

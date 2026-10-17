@@ -257,9 +257,11 @@ fun PlayerScreen(
             }
 
             val nextSong = playlist.getOrNull(playerState.currentIndex + 1)
+            val prevSongToPreload = playlist.getOrNull(playerState.currentIndex - 1)
             com.xiaowei.player.data.EmbeddedCoverFetcher.preloadPlayingCovers(
                 currentFilePath = song.data,
-                nextFilePath = nextSong?.data
+                nextFilePath = nextSong?.data,
+                prevFilePath = prevSongToPreload?.data
             )
             lastPreloadedSongId = song.id
         }

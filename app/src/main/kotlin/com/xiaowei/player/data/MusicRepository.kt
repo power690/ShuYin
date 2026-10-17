@@ -143,7 +143,8 @@ class MusicRepository(private val context: Context) {
                                 year = year,
                                 lyrics = lyrics,
                                 mimeType = mime,
-                                size = cursor.getLong(sizeCol)
+                                size = cursor.getLong(sizeCol),
+                                quality = cachedQuality(data, duration)
                             )
                         )
                     }
@@ -260,7 +261,8 @@ class MusicRepository(private val context: Context) {
                 lyrics = lyrics,
                 mimeType = mimeTypeStr,
                 size = file.length(),
-                source = "custom_path"
+                source = "custom_path",
+                quality = AudioQualityParser.parseFile(file, finalDuration)
             )
         } catch (e: Exception) {
             Log.w(TAG, "Failed to read metadata: $filePath - ${e.message}")
@@ -413,6 +415,34 @@ class MusicRepository(private val context: Context) {
         val tag: WavId3Parser.WavTag?
     )
 
+    private val qualityCache = ConcurrentHashMap<String, QualityCacheEntry>()
+
+    private class QualityCacheEntry(
+        val sizeBytes: Long,
+        val mtime: Long,
+        val quality: String?
+    )
+
+    private fun cachedQuality(path: String, durationMs: Long): String? {
+        if (path.isBlank()) return null
+        if (path.startsWith("http://") || path.startsWith("https://")) return null
+        val file = File(path)
+        if (!file.exists() || !file.canRead()) return null
+        val size = file.length()
+        val mtime = file.lastModified()
+        val cached = qualityCache[path]
+        if (cached != null && cached.sizeBytes == size && cached.mtime == mtime) {
+            return cached.quality
+        }
+        val quality = try {
+            AudioQualityParser.parseFile(file, durationMs)
+        } catch (_: Exception) {
+            null
+        }
+        qualityCache[path] = QualityCacheEntry(size, mtime, quality)
+        return quality
+    }
+
     private fun cachedWavTag(path: String): WavId3Parser.WavTag? {
         if (path.isBlank()) return null
         if (path.startsWith("http://") || path.startsWith("https://")) return null
@@ -558,6 +588,7 @@ class MusicRepository(private val context: Context) {
         writeString(dos, song.mimeType)
         dos.writeLong(song.size)
         writeString(dos, song.source)
+        writeString(dos, song.quality)
     }
 
     private fun readSong(dis: DataInputStream): Song {
@@ -578,6 +609,7 @@ class MusicRepository(private val context: Context) {
         val mimeType = readString(dis)
         val size = dis.readLong()
         val source = readString(dis) ?: "mediastore"
+        val quality = readString(dis)
         return Song(
             id = id,
             title = title,
@@ -595,7 +627,8 @@ class MusicRepository(private val context: Context) {
             lyrics = lyrics,
             mimeType = mimeType,
             size = size,
-            source = source
+            source = source,
+            quality = quality
         )
     }
 
@@ -775,7 +808,7 @@ class MusicRepository(private val context: Context) {
         private const val MAX_STRING_BYTES = 1024 * 1024
         private const val MAX_COMPRESSED_BYTES = 4 * 1024 * 1024
         private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
-        private const val CACHE_VERSION = 1
+        private const val CACHE_VERSION = 2
         private const val CACHE_FILE_NAME = ".music_scan_cache"
         private val COPY_SUFFIX_REGEX = Regex(""" \(\d+\)(\.[^.]+)?$""")
 
