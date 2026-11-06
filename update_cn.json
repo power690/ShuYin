@@ -2,6 +2,7 @@
   "versionCode": 34,
   "versionName": "3.0.0",
   "downloadUrl": "https://gitee.com/cuteqwwtr/ShuYin/releases/download/v3.0.0/ShuYin-release-3.0.0.apk",
+  "forceUpdate": true,
   "updateLog": {
     "en": "[New] User level\nLevels are only used to prioritize feature suggestions\nThey do not affect free usage or existing features\n[New] Audio quality level indicator\n[Correction] Text correction: Minimal navigation bar renamed to\nFloating navigation bar\n[Fix] Classic style in landscape mode\nIssue where some icons are too large",
     "zh": "【新增】用户等级\n等级仅用于功能建议处理优先级\n不影响免费使用与现有功能\n【新增】音质等级标识\n【修正】字符修正 简约导航栏修正为\n悬浮导航栏\n【修复】经典样式 横屏状态下\n部分图标过大的问题",
