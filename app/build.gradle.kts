@@ -17,8 +17,8 @@ android {
         applicationId = "com.xiaowei.player"
         minSdk = 23
         targetSdk = 37
-        versionCode = 34
-        versionName = "3.0.0"
+        versionCode = 35
+        versionName = "3.3.0"
         vectorDrawables { useSupportLibrary = true }
 
         externalNativeBuild {
@@ -70,6 +70,7 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
             freeCompilerArgs.addAll(
                 "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
                 "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
                 "-opt-in=androidx.compose.animation.ExperimentalAnimationApi"
             )
@@ -130,7 +131,8 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    implementation(libs.hehang.flac.extension)
+    compileOnly(libs.checker.qual)
+
     implementation(libs.okhttp)
     implementation(libs.backdrop)
     implementation(libs.material.kolor)

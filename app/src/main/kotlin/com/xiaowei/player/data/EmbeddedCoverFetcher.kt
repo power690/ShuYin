@@ -55,6 +55,22 @@ object EmbeddedCoverFetcher {
         val file = File(filePath)
         if (!file.exists() || !file.canRead()) return null
 
+        if (filePath.lowercase().endsWith(".ape")) {
+            return try {
+                val data = ApeMetadataParser.readCover(file)
+                if (data != null && data.isNotEmpty() && data.size <= MAX_COVER_BYTES) {
+                    byteCache.put(filePath, data)
+                    data
+                } else null
+            } catch (e: Exception) {
+                Log.w(TAG, "extract ape cover failed: $filePath - ${e.message}")
+                null
+            } catch (e: OutOfMemoryError) {
+                Log.w(TAG, "extract ape cover failed: $filePath - OOM")
+                null
+            }
+        }
+
         return try {
             val mmr = MediaMetadataRetriever()
             try {

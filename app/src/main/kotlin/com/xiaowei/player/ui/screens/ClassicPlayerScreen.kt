@@ -26,6 +26,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -117,6 +118,7 @@ import com.xiaowei.player.data.Song
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.AlbumCover
 import com.xiaowei.player.ui.components.formatDuration
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -1361,7 +1363,17 @@ fun ClassicPlayerScreen(
             }
             }
             if (showPlaylist) {
-                BackHandler { showPlaylist = false }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                    PredictiveBackHandler { progress ->
+                        try {
+                            progress.collect { }
+                            showPlaylist = false
+                        } catch (e: CancellationException) {
+                        }
+                    }
+                } else {
+                    BackHandler { showPlaylist = false }
+                }
             }
             AnimatedVisibility(
                 visible = showPlaylist,

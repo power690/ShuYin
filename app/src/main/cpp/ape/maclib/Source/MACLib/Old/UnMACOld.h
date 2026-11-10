@@ -1,0 +1,59 @@
+#pragma once
+
+#include "BitArray.h"
+#include "UnBitArrayBase.h"
+
+namespace APE
+{
+
+class CAntiPredictor;
+class CPrepare;
+class CAPEDecompressCoreOld;
+class CPredictorBase;
+class IPredictorDecompress;
+class IAPEDecompress;
+
+/**************************************************************************************************
+CUnMACOld class... a class that allows decoding on a frame-by-frame basis
+**************************************************************************************************/
+class CUnMACOld
+{
+public:
+    // construction / destruction
+    CUnMACOld();
+    ~CUnMACOld();
+
+    // functions
+    int Initialize(IAPEDecompress * pAPEDecompress);
+    int Uninitialize();
+    intn DecompressFrame(unsigned char * pOutputData, int32 nFrameIndex, int * pErrorCode);
+
+    int SeekToFrame(intn FrameIndex);
+
+private:
+    // data members
+    CSmartPtr<IAPEDecompress> m_spAPEDecompress;
+    CSmartPtr<CPrepare> m_spPrepare;
+    CSmartPtr<CAPEDecompressCoreOld> m_spAPEDecompressCore;
+    int m_LastDecodedFrameIndex;
+
+    // functions
+    void GenerateDecodedArrays(intn nBlocks, intn nSpecialCodes, intn nFrameIndex);
+    void GenerateDecodedArray(int * pInput_Array, uint32 Number_of_Elements, intn Frame_Index, CAntiPredictor * pAntiPredictor);
+
+    int CreateAntiPredictors(int nCompressionLevel, int nVersion);
+
+    intn DecompressFrameOld(unsigned char * pOutputData, int32 FrameIndex, int * pErrorCode);
+    uint32 CalculateOldChecksum(const int * pDataX, const int * pDataY, intn nChannels, intn nBlocks);
+
+public:
+    int m_nBlocksProcessed;
+    unsigned int m_nCRC;
+    unsigned int m_nStoredCRC;
+    WAVEFORMATEX m_wfeInput;
+
+private:
+    bool m_bInitialized;
+};
+
+}

@@ -7,9 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaowei.player.data.DarkModePrefs
 import com.xiaowei.player.i18n.Strings
+import com.xiaowei.player.ui.components.EdgeToEdgeSheetWindow
 
 private data class DarkModeOption(
     val mode: String,
@@ -58,12 +63,14 @@ fun DarkModePickerSheet(
         shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
         scrimColor = Color.Black.copy(alpha = 0.5f),
-        dragHandle = null
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) }
     ) {
+        EdgeToEdgeSheetWindow()
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 24.dp, bottom = 16.dp)
+                .padding(top = 24.dp)
         ) {
 
             Text(

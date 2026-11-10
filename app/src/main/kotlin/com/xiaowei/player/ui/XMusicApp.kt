@@ -3,6 +3,7 @@ package com.xiaowei.player.ui
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
@@ -30,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,8 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.layer.setOutline
@@ -51,12 +57,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.i18n.Strings
-import com.xiaowei.player.navkit.BLUR_MAX_DP
+import com.xiaowei.player.navkit.stackBlurSigma
 import com.xiaowei.player.navkit.COMPRESS_SCALE_MIN
 import com.xiaowei.player.navkit.COMPRESS_TRANSLATE_FRACTION
 import com.xiaowei.player.navkit.ENTER_RADIUS_DP
 import com.xiaowei.player.navkit.ENTER_SCALE_MIN
-import com.xiaowei.player.navkit.ENTER_SHADOW_MAX
 import com.xiaowei.player.navkit.progressiveBlur
 import com.xiaowei.player.navkit.stackSceneSpringSpec
 import com.xiaowei.player.navkit.supportsHardwareBlur
@@ -78,12 +83,15 @@ import com.xiaowei.player.ui.screens.ClassicPlayerScreen
 import com.xiaowei.player.ui.screens.RecommendDetailScreen
 import com.xiaowei.player.ui.screens.RecommendScreen
 import com.xiaowei.player.ui.screens.SearchScreen
+import com.xiaowei.player.ui.screens.OpenSourceLicenseScreen
 import com.xiaowei.player.ui.screens.SettingsScreen
+import com.xiaowei.player.ui.screens.SourceSettingsScreen
 import com.xiaowei.player.ui.screens.SponsorScreen
 import com.xiaowei.player.ui.screens.MaterialSettingsScreen
 import com.xiaowei.player.ui.screens.NavBarSettingsScreen
 import com.xiaowei.player.ui.screens.WebDavScreen
 import com.xiaowei.player.data.WebDavClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.pow
@@ -108,7 +116,9 @@ sealed class Detail {
     object NavBarSettings : Detail()
     object PlayerStyle : Detail()
     object Sponsor : Detail()
+    object SourceSettings : Detail()
     object WebDav : Detail()
+    object OpenSourceLicense : Detail()
     object None : Detail()
 }
 
@@ -149,6 +159,9 @@ fun ShuYinApp(
 
     val enterProgress = remember { Animatable(0f) }
     val playerEnterProgress = remember { Animatable(0f) }
+    val playerBackProgress = remember { Animatable(0f) }
+
+    var predictiveDragActive by remember { mutableStateOf(false) }
 
     val supportsBlur = remember { supportsHardwareBlur }
 
@@ -395,13 +408,65 @@ fun ShuYinApp(
         }
     }
 
-    BackHandler(enabled = playerExpanded) {
-        playerExpanded = false
+    val predictiveBackSupported =
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+
+    if (predictiveBackSupported) {
+        PredictiveBackHandler(enabled = playerExpanded) { progress ->
+            predictiveDragActive = true
+            try {
+                progress.collect { event ->
+                    val p = event.progress.coerceIn(0f, 1f)
+                    playerBackProgress.snapTo(p)
+                    playerEnterProgress.snapTo(1f - p)
+                }
+                predictiveDragActive = false
+                playerExpanded = false
+                backScope.launch {
+                    playerBackProgress.animateTo(1f, tween(180))
+                    playerBackProgress.snapTo(0f)
+                }
+            } catch (e: CancellationException) {
+                predictiveDragActive = false
+                backScope.launch {
+                    playerBackProgress.animateTo(0f, stackSceneSpringSpec())
+                }
+                backScope.launch {
+                    playerEnterProgress.animateTo(1f, stackSceneSpringSpec())
+                }
+            }
+        }
+        PredictiveBackHandler(enabled = !playerExpanded && inDetail) { progress ->
+            predictiveDragActive = true
+            val restoreBg = detailBackStack.isNotEmpty() && backgroundDetail == Detail.None
+            if (restoreBg) {
+                backgroundDetail = detailBackStack.last()
+            }
+            try {
+                progress.collect { event ->
+                    enterProgress.snapTo(1f - event.progress.coerceIn(0f, 1f))
+                }
+                predictiveDragActive = false
+                popDetail()
+            } catch (e: CancellationException) {
+                predictiveDragActive = false
+                backScope.launch {
+                    enterProgress.animateTo(1f, stackSceneSpringSpec())
+                    if (restoreBg) {
+                        backgroundDetail = Detail.None
+                    }
+                }
+            }
+        }
+    } else {
+        BackHandler(enabled = playerExpanded) {
+            playerExpanded = false
+        }
+        BackHandler(enabled = !playerExpanded && inDetail) {
+            popDetail()
+        }
     }
-    BackHandler(enabled = !playerExpanded && inDetail) {
-        popDetail()
-    }
-    BackHandler(enabled = !playerExpanded && !inDetail) {
+    BackHandler(enabled = !playerExpanded && !inDetail && !predictiveBackSupported) {
         if (backPressedOnce) {
             (context as? android.app.Activity)?.finish()
         } else {
@@ -505,7 +570,8 @@ fun ShuYinApp(
                                     if (backgroundDetail != Detail.None) 1f else detailP
                                 val compression = maxOf(detailCover, playerP)
                                 val animating =
-                                    enterProgress.isRunning || playerEnterProgress.isRunning
+                                    enterProgress.isRunning || playerEnterProgress.isRunning ||
+                                            predictiveDragActive
 
                                 if (compression > 0f || animating) {
                                     contentAnimLayer.record {
@@ -522,7 +588,7 @@ fun ShuYinApp(
                                         -compression * size.width * COMPRESS_TRANSLATE_FRACTION
 
                                     if (supportsBlur && compression > 0f && animating) {
-                                        val blurSigma = compression * density * BLUR_MAX_DP
+                                        val blurSigma = stackBlurSigma(compression) * density
                                         contentAnimLayer.renderEffect =
                                             BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
                                     }
@@ -550,7 +616,7 @@ fun ShuYinApp(
                                 when (tab) {
                                     Tab.Recommend -> {
                                         if (library.isLoading) LoadingScreen(message = loadingMusicText)
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
+                                        else if (library.songs.isEmpty() && library.webDavSongs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else RecommendScreen(
                                             library = library,
                                             playerState = playerState,
@@ -567,7 +633,7 @@ fun ShuYinApp(
                                     }
                                     Tab.Library -> {
                                         if (library.isLoading) LoadingScreen(message = loadingMusicText)
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
+                                        else if (library.songs.isEmpty() && library.webDavSongs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else LibraryScreen(
                                             library = library,
                                             playerState = playerState,
@@ -584,7 +650,7 @@ fun ShuYinApp(
                                     }
                                     Tab.Search -> {
                                         if (library.isLoading) LoadingScreen(message = loadingMusicText)
-                                        else if (library.songs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
+                                        else if (library.songs.isEmpty() && library.webDavSongs.isEmpty()) EmptyScanScreen(onRescan = onRefresh, buttonText = emptyScanButtonText, titleText = webDavEmptyTitle, messageText = webDavEmptyMessage)
                                         else SearchScreen(
                                             library = library,
                                             playerState = playerState,
@@ -761,7 +827,6 @@ fun ShuYinApp(
                                 )
                                 Detail.Settings -> SettingsScreen(
                                     onBack = { popDetail() },
-                                    onCustomPathConfirm = onCustomPathConfirm,
                                     onToggleMixWithOthers = { mix ->
                                         try {
                                             com.xiaowei.player.ShuYinApp.instance.playerManager
@@ -773,7 +838,14 @@ fun ShuYinApp(
                                     onOpenNavBarSettings = { requestDetail(Detail.NavBarSettings) },
                                     onOpenPlayerStyle = { requestDetail(Detail.PlayerStyle) },
                                     onOpenSponsor = { requestDetail(Detail.Sponsor) },
-                                    onOpenWebDav = { requestDetail(Detail.WebDav) }
+                                    onOpenSourceSettings = { requestDetail(Detail.SourceSettings) },
+                                    onOpenOpenSourceLicense = { requestDetail(Detail.OpenSourceLicense) }
+                                )
+                                Detail.SourceSettings -> SourceSettingsScreen(
+                                    onBack = { popDetail() },
+                                    onOpenWebDav = { requestDetail(Detail.WebDav) },
+                                    onCustomPathConfirm = onCustomPathConfirm,
+                                    onPriorityChanged = onRefresh
                                 )
                                 Detail.WebDav -> WebDavScreen(
                                     onBack = { popDetail() },
@@ -791,6 +863,9 @@ fun ShuYinApp(
                                 Detail.Sponsor -> SponsorScreen(
                                     onBack = { popDetail() }
                                 )
+                                Detail.OpenSourceLicense -> OpenSourceLicenseScreen(
+                                    onBack = { popDetail() }
+                                )
                                 Detail.None -> {  }
                             }
                         }
@@ -805,7 +880,8 @@ fun ShuYinApp(
                                         val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
                                         val compression = maxOf(detailP, playerP)
                                         val animating =
-                                            enterProgress.isRunning || playerEnterProgress.isRunning
+                                            enterProgress.isRunning || playerEnterProgress.isRunning ||
+                                                    predictiveDragActive
 
                                         if (compression > 0f || animating) {
                                             bgAnimLayer.record {
@@ -822,7 +898,7 @@ fun ShuYinApp(
                                                 -compression * size.width * COMPRESS_TRANSLATE_FRACTION
 
                                             if (supportsBlur && compression > 0f && animating) {
-                                                val blurSigma = compression * density * BLUR_MAX_DP
+                                                val blurSigma = stackBlurSigma(compression) * density
                                                 bgAnimLayer.renderEffect =
                                                     BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
                                             }
@@ -851,11 +927,29 @@ fun ShuYinApp(
                                         val enter = enterProgress.value
                                         val playerP = playerEnterProgress.value.coerceIn(0f, 1f)
                                         val animating =
-                                            enterProgress.isRunning || playerEnterProgress.isRunning
+                                            enterProgress.isRunning || playerEnterProgress.isRunning ||
+                                                    predictiveDragActive
 
                                         if (enter < 1f || playerP > 0f || animating) {
+                                            val radiusDp = ENTER_RADIUS_DP -
+                                                enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP +
+                                                playerP * ENTER_RADIUS_DP
+                                            val edgeOutline =
+                                                RoundedCornerShape(radiusDp.dp).createOutline(
+                                                    size, layoutDirection, this
+                                                )
+                                            val edgeStrokePx = 2.dp.toPx()
                                             detailAnimLayer.record {
                                                 this@drawWithContent.drawContent()
+                                                drawOutline(
+                                                    outline = edgeOutline,
+                                                    color = if (systemDarkForBars) {
+                                                        Color.White.copy(alpha = 0.18f)
+                                                    } else {
+                                                        Color.Black.copy(alpha = 0.22f)
+                                                    },
+                                                    style = Stroke(width = edgeStrokePx)
+                                                )
                                             }
                                             val enterScale = ENTER_SCALE_MIN + (1f - ENTER_SCALE_MIN) * enter
                                             val compressScale = COMPRESS_SCALE_MIN +
@@ -868,22 +962,12 @@ fun ShuYinApp(
                                             detailAnimLayer.translationX = (1f - enter) * size.width -
                                                 playerP * size.width * COMPRESS_TRANSLATE_FRACTION
 
-                                            val radiusDp = ENTER_RADIUS_DP -
-                                                enter.toDouble().pow(8.0).toFloat() * ENTER_RADIUS_DP +
-                                                playerP * ENTER_RADIUS_DP
-                                            detailAnimLayer.setOutline(
-                                                RoundedCornerShape(radiusDp.dp).createOutline(
-                                                    size, layoutDirection, this
-                                                )
-                                            )
+                                            detailAnimLayer.setOutline(edgeOutline)
                                             detailAnimLayer.clip = true
 
-                                            detailAnimLayer.shadowElevation =
-                                                ENTER_SHADOW_MAX.dp.toPx() * (1f - enter)
-
                                             if (supportsBlur && playerP > 0f &&
-                                                playerEnterProgress.isRunning) {
-                                                val blurSigma = playerP * density * BLUR_MAX_DP
+                                                (playerEnterProgress.isRunning || predictiveDragActive)) {
+                                                val blurSigma = stackBlurSigma(playerP) * density
                                                 detailAnimLayer.renderEffect =
                                                     BlurEffect(blurSigma, blurSigma, TileMode.Clamp)
                                             }
@@ -917,6 +1001,13 @@ fun ShuYinApp(
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    val p = playerBackProgress.value
+                    translationY = p * size.height * 0.25f
+                    val s = 1f - 0.1f * p
+                    scaleX = s
+                    scaleY = s
+                }
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null

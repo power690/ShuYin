@@ -310,7 +310,7 @@ class WebDavMusicSource(private val context: Context) {
         val finalAlbum = album ?: ""
 
         val id = davFile.url.hashCode().toLong() and 0xFFFFFFFFL
-        val albumId = "$finalArtist|$finalAlbum".hashCode().toLong() and 0xFFFFFFFFL
+        val albumId = MusicRepository.albumKey(finalAlbum)
         val artistId = finalArtist.hashCode().toLong() and 0xFFFFFFFFL
 
         val quality = resolveRemoteQuality(account, davFile, duration)
@@ -749,7 +749,7 @@ class WebDavMusicSource(private val context: Context) {
         private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
         private const val SCAN_PARALLELISM = 8
         private const val CACHE_MAGIC = 0x57444156
-        private const val CACHE_VERSION = 4
+        private const val CACHE_VERSION = 5
         private const val CACHE_PREFIX = ".webdav_scan_cache_"
         private const val FLAC_HEAD_FIRST = 4096
         private const val FLAC_HEAD_MAX = 2097152

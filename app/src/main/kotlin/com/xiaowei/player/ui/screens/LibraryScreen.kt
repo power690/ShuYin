@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -34,7 +36,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
@@ -54,6 +58,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
@@ -61,10 +66,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.ArtistCoverPrefs
+import com.xiaowei.player.data.LibraryGridPrefs
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.player.MusicPlayerManager
 import com.xiaowei.player.ui.components.BlurTopBarLayout
+import com.xiaowei.player.ui.components.ColumnsButton
+import com.xiaowei.player.ui.components.GridColumnsOption
 import com.xiaowei.player.ui.components.SortButton
 import com.xiaowei.player.ui.components.SortOption
 import com.xiaowei.player.ui.components.SongRow
@@ -77,6 +85,7 @@ import kotlinx.coroutines.launch
 
 private enum class LibraryTab(val labelKey: String) {
     Songs("library_songs"),
+    Network("library_network"),
     Artists("library_artists"),
     Albums("library_albums")
 }
@@ -96,9 +105,15 @@ fun LibraryScreen(
 
     bottomPadding: Dp = 168.dp
 ) {
-    val tabs = LibraryTab.entries
+    val tabs = if (library.webDavActive) {
+        LibraryTab.entries
+    } else {
+        LibraryTab.entries.filter { it != LibraryTab.Network }
+    }
 
-    val pagerState = rememberPagerState(initialPage = initialPage) { tabs.size }
+    val pagerState = rememberPagerState(
+        initialPage = initialPage.coerceIn(0, tabs.lastIndex)
+    ) { tabs.size }
     LaunchedEffect(pagerState.currentPage) {
         onPageChanged(pagerState.currentPage)
     }
@@ -106,9 +121,12 @@ fun LibraryScreen(
 
     val hazeState = rememberHazeState()
     val blurSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+    val gridPrefs = LibraryGridPrefs.get(LocalContext.current)
+    val gridColumnCount = gridPrefs.gridColumnsState.value
     val songsListState = rememberLazyListState()
     val artistsGridState = rememberLazyGridState()
     val albumsGridState = rememberLazyGridState()
+    val networkListState = rememberLazyListState()
     val titleScrolled by remember {
         derivedStateOf {
             if (!blurSupported) false
@@ -116,6 +134,7 @@ fun LibraryScreen(
                 LibraryTab.Songs -> songsListState.canScrollBackward
                 LibraryTab.Artists -> artistsGridState.canScrollBackward
                 LibraryTab.Albums -> albumsGridState.canScrollBackward
+                LibraryTab.Network -> networkListState.canScrollBackward
             }
         }
     }
@@ -186,7 +205,9 @@ fun LibraryScreen(
                     hazeState = hazeState,
                     blurEnabled = blurSupported,
                     gridState = artistsGridState,
-                    topPadding = topBarHeight + 12.dp,
+                    columnCount = gridColumnCount,
+                    onColumnCountChange = { gridPrefs.gridColumns = it },
+                    topPadding = topBarHeight + 4.dp,
                     bottomPadding = bottomPadding
                 )
                 LibraryTab.Albums -> AlbumsPane(
@@ -195,8 +216,23 @@ fun LibraryScreen(
                     hazeState = hazeState,
                     blurEnabled = blurSupported,
                     gridState = albumsGridState,
-                    topPadding = topBarHeight + 12.dp,
+                    columnCount = gridColumnCount,
+                    onColumnCountChange = { gridPrefs.gridColumns = it },
+                    topPadding = topBarHeight + 4.dp,
                     bottomPadding = bottomPadding
+                )
+                LibraryTab.Network -> SongsPane(
+                    library = library,
+                    playerState = playerState,
+                    onPlaySong = onPlaySong,
+                    onAddSong = onAddSong,
+                    onOpenPlayer = onOpenPlayer,
+                    hazeState = hazeState,
+                    blurEnabled = blurSupported,
+                    listState = networkListState,
+                    topPadding = topBarHeight + 4.dp,
+                    bottomPadding = bottomPadding,
+                    network = true
                 )
             }
             }
@@ -215,18 +251,20 @@ private fun SongsPane(
     blurEnabled: Boolean,
     listState: LazyListState,
     topPadding: Dp,
-    bottomPadding: Dp = 168.dp
+    bottomPadding: Dp = 168.dp,
+    network: Boolean = false
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DEFAULT) }
-    val songs = library.filteredSongs
+    val songs = if (network) library.filteredWebDavSongs else library.filteredSongs
     if (songs.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = if (library.searchQuery.isBlank()) Strings.get("empty_songs")
-                else Strings.get("search_no_result", library.searchQuery),
+                text = if (library.searchQuery.isBlank()) {
+                    if (network) Strings.get("empty_network_songs") else Strings.get("empty_songs")
+                } else Strings.get("search_no_result", library.searchQuery),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -311,6 +349,8 @@ private fun ArtistsPane(
     hazeState: HazeState,
     blurEnabled: Boolean,
     gridState: LazyGridState,
+    columnCount: Int,
+    onColumnCountChange: (Int) -> Unit,
     topPadding: Dp,
     bottomPadding: Dp = 168.dp
 ) {
@@ -331,14 +371,21 @@ private fun ArtistsPane(
     }
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Adaptive(
-            minSize = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) 180.dp else 150.dp
-        ),
+        columns = GridCells.Fixed(columnCount),
         modifier = Modifier
             .fillMaxSize()
             .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPadding, bottom = bottomPadding)
     ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            GridHeaderRow(
+                count = artists.size,
+                countLabelKey = "grid_artist_count",
+                icon = Icons.Filled.Person,
+                columnCount = columnCount,
+                onColumnCountChange = onColumnCountChange
+            )
+        }
         items(
             items = artists,
             key = { artist -> artist.id.toString() + "_" + artist.displayName },
@@ -368,6 +415,8 @@ private fun AlbumsPane(
     hazeState: HazeState,
     blurEnabled: Boolean,
     gridState: LazyGridState,
+    columnCount: Int,
+    onColumnCountChange: (Int) -> Unit,
     topPadding: Dp,
     bottomPadding: Dp = 168.dp
 ) {
@@ -388,14 +437,21 @@ private fun AlbumsPane(
     }
     LazyVerticalGrid(
         state = gridState,
-        columns = GridCells.Adaptive(
-            minSize = if (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 600) 180.dp else 150.dp
-        ),
+        columns = GridCells.Fixed(columnCount),
         modifier = Modifier
             .fillMaxSize()
             .then(if (blurEnabled) Modifier.hazeSource(hazeState) else Modifier),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = topPadding, bottom = bottomPadding)
     ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            GridHeaderRow(
+                count = albums.size,
+                countLabelKey = "grid_album_count",
+                icon = Icons.Filled.Album,
+                columnCount = columnCount,
+                onColumnCountChange = onColumnCountChange
+            )
+        }
         items(
             items = albums,
             key = { album -> album.id.toString() + "_" + album.displayName },
@@ -404,6 +460,53 @@ private fun AlbumsPane(
             LibraryAlbumTile(
                 album = album,
                 onClick = { onOpenAlbum(album.id) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun GridHeaderRow(
+    count: Int,
+    countLabelKey: String,
+    icon: ImageVector,
+    columnCount: Int,
+    onColumnCountChange: (Int) -> Unit
+) {
+    val columns = GridColumnsOption.entries.firstOrNull { it.count == columnCount } ?: GridColumnsOption.TWO
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(end = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        ColumnsButton(
+            columns = columns,
+            onColumnsChange = { onColumnCountChange(it.count) }
+        )
+        Spacer(Modifier.weight(1f))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = Strings.get(countLabelKey, count),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp
             )
         }
     }
@@ -424,7 +527,7 @@ fun LibraryArtistTile(
     )
     Column(
         modifier = Modifier
-            .width(140.dp)
+            .fillMaxWidth()
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -440,7 +543,7 @@ fun LibraryArtistTile(
         com.xiaowei.player.ui.components.AlbumCover(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp),
+                .aspectRatio(1f),
             cornerRadius = 16,
             coverSizePx = 384,
             filePath = coverPath ?: artist.firstSongData
@@ -470,7 +573,7 @@ fun LibraryAlbumTile(
     )
     Column(
         modifier = Modifier
-            .width(140.dp)
+            .fillMaxWidth()
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -486,7 +589,7 @@ fun LibraryAlbumTile(
         com.xiaowei.player.ui.components.AlbumCover(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(140.dp),
+                .aspectRatio(1f),
             cornerRadius = 16,
             coverSizePx = 384,
             filePath = album.firstSongData

@@ -7,6 +7,7 @@ import android.os.Build
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.memory.MemoryCache
+import com.xiaowei.player.crash.CrashHandler
 import com.xiaowei.player.data.EmbeddedCoverFetcher
 import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.LoginPlaybackGate
@@ -23,8 +24,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
-class ShuYinApp : Application(), ImageLoaderFactory {
-
+class ShuYinApp :
+    Application(),
+    ImageLoaderFactory {
     lateinit var database: AppDatabase
         private set
     lateinit var playerManager: MusicPlayerManager
@@ -34,6 +36,18 @@ class ShuYinApp : Application(), ImageLoaderFactory {
     lateinit var playbackPrefs: PlaybackPrefs
         private set
 
+    @Volatile
+    var appForeground: Boolean = false
+
+    @Volatile
+    var currentPage: String = ""
+
+    @Volatile
+    var lastUserAction: String = ""
+
+    @Volatile
+    var operationSequence: Long = 0L
+
     private val musicRepository by lazy { MusicRepository(this) }
     private val webDavMusicSource by lazy { WebDavMusicSource(this) }
 
@@ -41,23 +55,25 @@ class ShuYinApp : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
+        CrashHandler.install(this)
         instance = this
 
         database = AppDatabase.get(this)
         favoriteRepo = FavoriteRepository(database)
         playbackPrefs = PlaybackPrefs(database)
-        playerManager = MusicPlayerManager(
-            context = this,
-            playbackPrefs = playbackPrefs,
-            lyricsLoader = { song ->
-                if (song.source == "webdav") {
-                    val account = WebDavPrefs.get(this).activeAccount()
-                    if (account != null) webDavMusicSource.fetchLyricsFor(account, song) else null
-                } else {
-                    musicRepository.reloadLyrics(song)
-                }
-            }
-        )
+        playerManager =
+            MusicPlayerManager(
+                context = this,
+                playbackPrefs = playbackPrefs,
+                lyricsLoader = { song ->
+                    if (song.source == "webdav") {
+                        val account = WebDavPrefs.get(this).activeAccount()
+                        if (account != null) webDavMusicSource.fetchLyricsFor(account, song) else null
+                    } else {
+                        musicRepository.reloadLyrics(song)
+                    }
+                },
+            )
         createNotificationChannel()
         purgeCoverCaches()
         registerLoginPlaybackGate()
@@ -69,28 +85,41 @@ class ShuYinApp : Application(), ImageLoaderFactory {
 
     private fun registerLoginPlaybackGate() {
         var startedActivityCount = 0
-        registerActivityLifecycleCallbacks(object : Application.ActivityLifecycleCallbacks {
-            override fun onActivityStarted(activity: android.app.Activity) {
-                startedActivityCount++
-                loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
-            }
+        registerActivityLifecycleCallbacks(
+            object : Application.ActivityLifecycleCallbacks {
+                override fun onActivityStarted(activity: android.app.Activity) {
+                    startedActivityCount++
+                    loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
+                }
 
-            override fun onActivityStopped(activity: android.app.Activity) {
-                startedActivityCount--
-                if (startedActivityCount < 0) startedActivityCount = 0
-                loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
-            }
+                override fun onActivityStopped(activity: android.app.Activity) {
+                    startedActivityCount--
+                    if (startedActivityCount < 0) startedActivityCount = 0
+                    loginPlaybackGate.onForegroundStateChanged(startedActivityCount > 0)
+                }
 
-            override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
+                override fun onActivityCreated(
+                    activity: android.app.Activity,
+                    savedInstanceState: android.os.Bundle?,
+                ) {}
 
-            override fun onActivityResumed(activity: android.app.Activity) {}
+                override fun onActivityResumed(activity: android.app.Activity) {
+                    appForeground = true
+                    currentPage = activity.javaClass.simpleName
+                }
 
-            override fun onActivityPaused(activity: android.app.Activity) {}
+                override fun onActivityPaused(activity: android.app.Activity) {
+                    appForeground = false
+                }
 
-            override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
+                override fun onActivitySaveInstanceState(
+                    activity: android.app.Activity,
+                    outState: android.os.Bundle,
+                ) {}
 
-            override fun onActivityDestroyed(activity: android.app.Activity) {}
-        })
+                override fun onActivityDestroyed(activity: android.app.Activity) {}
+            },
+        )
         appScope.launch {
             playerManager.state.collect { state ->
                 loginPlaybackGate.onPlaybackStateChanged(state.isPlaying || state.isBuffering)
@@ -111,22 +140,25 @@ class ShuYinApp : Application(), ImageLoaderFactory {
         }.start()
     }
 
-    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
-        .memoryCache {
-            MemoryCache.Builder(this)
-                .maxSizePercent(0.18)
-                .build()
-        }
-        .respectCacheHeaders(false)
-        .build()
+    override fun newImageLoader(): ImageLoader =
+        ImageLoader
+            .Builder(this)
+            .memoryCache {
+                MemoryCache
+                    .Builder(this)
+                    .maxSizePercent(0.18)
+                    .build()
+            }.respectCacheHeaders(false)
+            .build()
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                "shuyin_playback",
-                Strings.get("notification_channel_name"),
-                NotificationManager.IMPORTANCE_LOW
-            )
+            val channel =
+                NotificationChannel(
+                    "shuyin_playback",
+                    Strings.get("notification_channel_name"),
+                    NotificationManager.IMPORTANCE_LOW,
+                )
             val nm = getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(channel)
         }
@@ -135,5 +167,7 @@ class ShuYinApp : Application(), ImageLoaderFactory {
     companion object {
         lateinit var instance: ShuYinApp
             private set
+
+        fun isInitialized(): Boolean = ::instance.isInitialized
     }
 }

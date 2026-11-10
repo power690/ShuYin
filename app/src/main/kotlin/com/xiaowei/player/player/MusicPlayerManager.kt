@@ -9,6 +9,8 @@ import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.support.v4.media.session.MediaSessionCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -107,7 +109,7 @@ class MusicPlayerManager(
         }
 
         ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory, io.github.eugenedibtsev.media3.ape.ApeSupport.extractorsFactory()))
             .setAudioAttributes(
                 mediaAudioAttributes,
                 !AudioMixPrefs.get(context).mixWithOthers
@@ -153,7 +155,13 @@ class MusicPlayerManager(
                     }
                 }
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                    if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO &&
+                        _state.value.playMode == PlayMode.SHUFFLE && playlist.size > 1) {
+                        playAtIndexInternal(nextShuffleIndex())
+                        return
+                    }
                     val idx = currentMediaItemIndex
+                    shuffleQueue.remove(idx)
                     _state.update { s ->
                         s.copy(
                             currentSong = playlist.getOrNull(idx),
@@ -289,6 +297,8 @@ class MusicPlayerManager(
     fun playQueue(songs: List<Song>, startIndex: Int = 0) {
         if (songs.isEmpty()) return
         playlist = songs
+        lastShuffledIndex = startIndex.coerceIn(0, songs.lastIndex)
+        rebuildShuffleQueue()
 
         player.setMediaItems(
             songs.map { it.toMediaItem() },
@@ -303,6 +313,7 @@ class MusicPlayerManager(
                 currentIndex = startIndex
             )
         }
+        startPlaybackService()
         startTicker()
         
         tryReloadLyricsIfNeeded(songs[startIndex])
@@ -319,6 +330,7 @@ class MusicPlayerManager(
                 currentIndex = index
             )
         }
+        startPlaybackService()
         startTicker()
 
         tryReloadLyricsIfNeeded(playlist[index])
@@ -421,7 +433,11 @@ class MusicPlayerManager(
             player.seekToDefaultPosition(newIndex)
             player.prepare()
             player.playWhenReady = true
+            startPlaybackService()
         }
+
+        lastShuffledIndex = _state.value.currentIndex
+        rebuildShuffleQueue()
 
         savePlaybackStateSnapshot(positionMs = player.currentPosition)
     }
@@ -444,6 +460,7 @@ class MusicPlayerManager(
             if (player.playbackState == Player.STATE_IDLE) player.prepare()
             player.play()
             _state.update { it.copy(isPlaying = true) }
+            startPlaybackService()
         }
     }
 
@@ -466,6 +483,39 @@ class MusicPlayerManager(
         pendingSeekAtElapsed = android.os.SystemClock.elapsedRealtime()
         player.seekTo(positionMs)
         _state.update { it.copy(positionMs = positionMs) }
+    }
+
+    private val shuffleRandom = java.security.SecureRandom()
+    private val shuffleQueue = ArrayDeque<Int>()
+    private var lastShuffledIndex = -1
+
+    private fun rebuildShuffleQueue() {
+        shuffleQueue.clear()
+        val n = playlist.size
+        if (n <= 0) return
+        val indices = ArrayList<Int>(n)
+        for (i in 0 until n) indices.add(i)
+        for (i in n - 1 downTo 1) {
+            val j = shuffleRandom.nextInt(i + 1)
+            val tmp = indices[i]
+            indices[i] = indices[j]
+            indices[j] = tmp
+        }
+        if (n > 1 && indices[0] == lastShuffledIndex) {
+            val swapPos = 1 + shuffleRandom.nextInt(n - 1)
+            val tmp = indices[0]
+            indices[0] = indices[swapPos]
+            indices[swapPos] = tmp
+        }
+        shuffleQueue.addAll(indices)
+    }
+
+    private fun nextShuffleIndex(): Int {
+        if (playlist.isEmpty()) return _state.value.currentIndex
+        if (shuffleQueue.isEmpty()) rebuildShuffleQueue()
+        val next = shuffleQueue.removeFirstOrNull() ?: return _state.value.currentIndex
+        lastShuffledIndex = next
+        return next
     }
 
     fun skipToNext() {
@@ -491,14 +541,7 @@ class MusicPlayerManager(
         when (_state.value.playMode) {
             PlayMode.SHUFFLE -> {
 
-                val nextIndex = if (playlist.size > 1) {
-                    var random: Int
-                    do {
-                        random = (0 until playlist.size).random()
-                    } while (random == current)
-                    random
-                } else 0
-                playAtIndexInternal(nextIndex)
+                playAtIndexInternal(nextShuffleIndex())
             }
             PlayMode.REPEAT_ONE -> {
 
@@ -523,6 +566,7 @@ class MusicPlayerManager(
                 currentIndex = index
             )
         }
+        startPlaybackService()
         
         tryReloadLyricsIfNeeded(playlist[index])
     }
@@ -551,15 +595,19 @@ class MusicPlayerManager(
             PlayMode.SEQUENCE -> {
                 player.shuffleModeEnabled = false
                 player.repeatMode = Player.REPEAT_MODE_OFF
+                shuffleQueue.clear()
             }
             PlayMode.SHUFFLE -> {
 
-                player.shuffleModeEnabled = true
+                player.shuffleModeEnabled = false
                 player.repeatMode = Player.REPEAT_MODE_OFF
+                lastShuffledIndex = _state.value.currentIndex
+                rebuildShuffleQueue()
             }
             PlayMode.REPEAT_ONE -> {
                 player.shuffleModeEnabled = false
                 player.repeatMode = Player.REPEAT_MODE_ONE
+                shuffleQueue.clear()
             }
         }
         _state.update { it.copy(playMode = mode) }
@@ -651,7 +699,12 @@ class MusicPlayerManager(
     }
 
     private fun startPlaybackService() {
-        PlaybackService.startService(context)
+        try {
+            if (ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                PlaybackService.startService(context)
+            }
+        } catch (_: Exception) {
+        }
     }
 
     private fun startTicker() {
@@ -687,7 +740,7 @@ class MusicPlayerManager(
             "webdav" -> {
                 Uri.parse(data)
             }
-            "custom_path" -> {
+            "custom_path", "mediastore_files" -> {
 
                 try {
                     Uri.fromFile(java.io.File(data))

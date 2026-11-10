@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -56,7 +56,9 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import java.util.zip.CRC32
 
 object UpdateCheckerState {
 
@@ -142,6 +144,7 @@ fun UpdateDialog(
     val scope = rememberCoroutineScope()
 
     val expectedFileName = expectedApkName(updateInfo.versionName)
+    val forced = updateInfo.forceUpdate
     val existingFile = remember(updateInfo.versionName) { findExistingApk(context, expectedFileName) }
 
     var downloadState by remember {
@@ -153,13 +156,37 @@ fun UpdateDialog(
     var downloadJob by remember { mutableStateOf<Job?>(null) }
     val httpCallRef = remember { java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>(null) }
 
+    val startDownload: () -> Unit = {
+        if (downloadState !is DownloadState.Downloading) {
+            downloadJob?.cancel()
+            val job = scope.launch {
+                downloadState = DownloadState.Downloading(0f)
+                val saved = downloadApkVerified(
+                    context,
+                    updateInfo,
+                    httpCallRef
+                ) { p ->
+                    downloadState = DownloadState.Downloading(p)
+                }
+                httpCallRef.set(null)
+                if (saved != null) {
+                    downloadedFile = saved
+                    downloadState = DownloadState.Done
+                } else {
+                    downloadState = DownloadState.Failed
+                }
+            }
+            downloadJob = job
+        }
+    }
+
     Dialog(
         onDismissRequest = {
-            if (downloadState !is DownloadState.Downloading) onDismiss()
+            if (!forced && downloadState !is DownloadState.Downloading) onDismiss()
         },
         properties = DialogProperties(
-            dismissOnBackPress = downloadState !is DownloadState.Downloading,
-            dismissOnClickOutside = downloadState !is DownloadState.Downloading,
+            dismissOnBackPress = !forced && downloadState !is DownloadState.Downloading,
+            dismissOnClickOutside = !forced && downloadState !is DownloadState.Downloading,
             usePlatformDefaultWidth = false
         )
     ) {
@@ -203,7 +230,7 @@ fun UpdateDialog(
                 val dl = downloadState
                 if (dl is DownloadState.Downloading) {
                     Spacer(Modifier.height(16.dp))
-                    LinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         progress = { dl.progress },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -227,50 +254,46 @@ fun UpdateDialog(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(
-                        onClick = {
-                            if (downloadState is DownloadState.Downloading) {
-                                httpCallRef.getAndSet(null)?.cancel()
-                                downloadJob?.cancel()
-                                downloadJob = null
-                                downloadState = DownloadState.Idle
-                            } else {
-                                onDismiss()
+                    if (!forced) {
+                        TextButton(
+                            onClick = {
+                                if (downloadState is DownloadState.Downloading) {
+                                    httpCallRef.getAndSet(null)?.cancel()
+                                    downloadJob?.cancel()
+                                    downloadJob = null
+                                    downloadState = DownloadState.Idle
+                                } else {
+                                    onDismiss()
+                                }
                             }
+                        ) {
+                            Text(
+                                text = Strings.get("update_cancel"),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    ) {
-                        Text(
-                            text = Strings.get("update_cancel"),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Spacer(Modifier.width(8.dp))
                     }
-                    Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = {
                             val file = downloadedFile
                             if (file != null && file.exists() && downloadState is DownloadState.Done) {
-                                installApk(context, file)
-                            } else if (downloadState !is DownloadState.Downloading) {
-                                downloadJob?.cancel()
-                                val job = scope.launch {
-                                    downloadState = DownloadState.Downloading(0f)
-                                    val saved = downloadApk(
-                                        context,
-                                        updateInfo.downloadUrl,
-                                        updateInfo.versionName,
-                                        httpCallRef
-                                    ) { p ->
-                                        downloadState = DownloadState.Downloading(p)
+                                scope.launch {
+                                    val ok = withContext(Dispatchers.IO) {
+                                        val valid = verifyApk(file)
+                                        if (!valid) file.delete()
+                                        valid
                                     }
-                                    httpCallRef.set(null)
-                                    if (saved != null) {
-                                        downloadedFile = saved
-                                        downloadState = DownloadState.Done
+                                    if (ok) {
+                                        installApk(context, file)
                                     } else {
-                                        downloadState = DownloadState.Failed
+                                        downloadedFile = null
+                                        downloadState = DownloadState.Idle
+                                        startDownload()
                                     }
                                 }
-                                downloadJob = job
+                            } else {
+                                startDownload()
                             }
                         },
                         enabled = downloadState !is DownloadState.Downloading,
@@ -342,6 +365,71 @@ private fun cleanupInstalledApks(context: Context) {
         }
     } catch (_: Exception) {
     }
+}
+
+private fun toHex(bytes: ByteArray): String = bytes.joinToString("") { "%02X".format(it) }
+
+private fun computeChecksums(file: File): Map<String, String>? {
+    return try {
+        val crc = CRC32()
+        val md5 = MessageDigest.getInstance("MD5")
+        val sha1 = MessageDigest.getInstance("SHA-1")
+        val sha256 = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            var read: Int
+            while (input.read(buf).also { read = it } != -1) {
+                crc.update(buf, 0, read)
+                md5.update(buf, 0, read)
+                sha1.update(buf, 0, read)
+                sha256.update(buf, 0, read)
+            }
+        }
+        mapOf(
+            "crc32" to crc.value.toString(16).padStart(8, '0'),
+            "md5" to toHex(md5.digest()),
+            "sha1" to toHex(sha1.digest()),
+            "sha256" to toHex(sha256.digest())
+        )
+    } catch (e: Exception) {
+        null
+    }
+}
+
+private fun verifyApk(file: File): Boolean {
+    val sums = computeChecksums(file) ?: return false
+    if (UpdateChecker.EXPECTED_CRC32.isNotBlank() && !sums.getValue("crc32").equals(UpdateChecker.EXPECTED_CRC32, ignoreCase = true)) return false
+    if (UpdateChecker.EXPECTED_MD5.isNotBlank() && !sums.getValue("md5").equals(UpdateChecker.EXPECTED_MD5, ignoreCase = true)) return false
+    if (UpdateChecker.EXPECTED_SHA1.isNotBlank() && !sums.getValue("sha1").equals(UpdateChecker.EXPECTED_SHA1, ignoreCase = true)) return false
+    if (UpdateChecker.EXPECTED_SHA256.isNotBlank() && !sums.getValue("sha256").equals(UpdateChecker.EXPECTED_SHA256, ignoreCase = true)) return false
+    return true
+}
+
+private suspend fun downloadApkVerified(
+    context: Context,
+    updateInfo: UpdateChecker.UpdateInfo,
+    callRef: java.util.concurrent.atomic.AtomicReference<okhttp3.Call?>,
+    onProgress: (Float) -> Unit
+): File? = withContext(Dispatchers.IO) {
+    var saved: File? = null
+    var attempts = 0
+    while (saved == null && attempts < 3) {
+        attempts++
+        val file = downloadApk(
+            context,
+            updateInfo.downloadUrl,
+            updateInfo.versionName,
+            callRef,
+            onProgress
+        )
+        if (file == null) break
+        if (verifyApk(file)) {
+            saved = file
+        } else {
+            file.delete()
+        }
+    }
+    saved
 }
 
 private suspend fun downloadApk(

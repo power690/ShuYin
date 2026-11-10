@@ -7,7 +7,6 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -17,30 +16,37 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,16 +60,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.SubcomposeLayout
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.xiaowei.player.data.EmbeddedCoverFetcher
@@ -180,15 +186,28 @@ fun sortSongs(songs: List<Song>, option: SortOption): List<Song> = when (option)
 }
 
 @Composable
+fun EdgeToEdgeSheetWindow() {
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@SideEffect
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun SortButton(
     sortOption: SortOption,
     onSortOptionChange: (SortOption) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    var anchorWidthPx by remember { mutableStateOf(0) }
-    val density = LocalDensity.current
-    var menuWidthPx by remember { mutableStateOf(with(density) { 200.dp.roundToPx() }) }
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
@@ -199,7 +218,6 @@ fun SortButton(
     Box(modifier = modifier) {
         Row(
             modifier = Modifier
-                .onGloballyPositioned { anchorWidthPx = it.size.width }
                 .graphicsLayer {
                     scaleX = scale
                     scaleY = scale
@@ -238,53 +256,45 @@ fun SortButton(
                 overflow = TextOverflow.Ellipsis
             )
         }
-        val offsetX = with(density) { (anchorWidthPx - menuWidthPx).toDp() }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            offset = DpOffset(offsetX, 0.dp),
-            shape = RoundedCornerShape(12.dp),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            tonalElevation = 0.dp,
-            shadowElevation = 0.dp,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-        ) {
-            Column(
-                modifier = Modifier
-                    .widthIn(min = 150.dp)
-                    .onGloballyPositioned { menuWidthPx = it.size.width }
-                    .heightIn(max = 144.dp)
-                    .verticalScroll(rememberScrollState())
+        if (expanded) {
+            ModalBottomSheet(
+                onDismissRequest = { expanded = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                scrimColor = Color.Black.copy(alpha = 0.5f),
+                dragHandle = null,
+                contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) }
             ) {
-                val groups = listOf(
-                    listOf(SortOption.DEFAULT),
-                    listOf(
-                        SortOption.TITLE_AZ,
-                        SortOption.TITLE_ZA,
-                        SortOption.ARTIST_AZ,
-                        SortOption.ARTIST_ZA,
-                        SortOption.ALBUM_AZ,
-                        SortOption.ALBUM_ZA
-                    ),
-                    listOf(
-                        SortOption.DURATION_ASC,
-                        SortOption.DURATION_DESC,
-                        SortOption.SIZE_ASC,
-                        SortOption.SIZE_DESC,
-                        SortOption.DATE_ADDED_DESC,
-                        SortOption.DATE_ADDED_ASC
+                EdgeToEdgeSheetWindow()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp)
+                ) {
+                    Text(
+                        text = Strings.get("sort_by"),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
                     )
-                )
-                groups.forEach { group ->
-                    group.forEach { option ->
-                        SortMenuItem(
-                            option = option,
-                            selected = option == sortOption,
-                            onClick = {
-                                onSortOptionChange(option)
-                                expanded = false
-                            }
-                        )
+                    Spacer(Modifier.size(8.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 480.dp)
+                    ) {
+                        items(SortOption.values().toList()) { option ->
+                            SortSheetRow(
+                                label = Strings.get(option.labelKey),
+                                isSelected = option == sortOption,
+                                onClick = {
+                                    onSortOptionChange(option)
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -293,31 +303,155 @@ fun SortButton(
 }
 
 @Composable
-private fun SortMenuItem(
-    option: SortOption,
-    selected: Boolean,
+private fun SortSheetRow(
+    label: String,
+    isSelected: Boolean,
     onClick: () -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(36.dp)
-            .clip(RoundedCornerShape(7.dp))
+            .clip(RoundedCornerShape(24.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
+            .padding(horizontal = 24.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        Box(
+            modifier = Modifier
+                .size(20.dp)
+                .clip(CircleShape)
+                .border(
+                    width = 2.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isSelected) {
+                Box(
+                    modifier = Modifier
+                        .size(10.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
         Text(
-            text = Strings.get(option.labelKey),
-            style = MaterialTheme.typography.labelLarge,
-            fontSize = 12.sp,
-            lineHeight = 14.sp,
-            color = if (selected) MaterialTheme.colorScheme.primary
-            else MaterialTheme.colorScheme.onSurfaceVariant,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            text = label,
+            fontSize = 16.sp,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
         )
+    }
+}
+
+enum class GridColumnsOption(val count: Int, val labelKey: String) {
+    TWO(2, "grid_columns_2"),
+    THREE(3, "grid_columns_3"),
+    FOUR(4, "grid_columns_4")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ColumnsButton(
+    columns: GridColumnsOption,
+    onColumnsChange: (GridColumnsOption) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = 0.65f, stiffness = 900f),
+        label = "columnsButtonScale"
+    )
+    Box(modifier = modifier) {
+        Row(
+            modifier = Modifier
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }
+                .clip(RoundedCornerShape(20.dp))
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = ripple(),
+                    onClick = { expanded = true }
+                )
+                .padding(horizontal = 12.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.GridView,
+                    contentDescription = Strings.get("grid_columns"),
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = Strings.get("grid_columns"),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (expanded) {
+            ModalBottomSheet(
+                onDismissRequest = { expanded = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                scrimColor = Color.Black.copy(alpha = 0.5f),
+                dragHandle = null,
+                contentWindowInsets = { WindowInsets.safeDrawing.only(WindowInsetsSides.Top) }
+            ) {
+                EdgeToEdgeSheetWindow()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 24.dp)
+                ) {
+                    Text(
+                        text = Strings.get("grid_columns"),
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp)
+                    )
+                    Spacer(Modifier.size(8.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 480.dp)
+                    ) {
+                        items(GridColumnsOption.values().toList()) { option ->
+                            SortSheetRow(
+                                label = Strings.get(option.labelKey),
+                                isSelected = option == columns,
+                                onClick = {
+                                    onColumnsChange(option)
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

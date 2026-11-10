@@ -16,13 +16,19 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.xiaowei.player.ShuYinApp
+import com.xiaowei.player.data.LyricLine
+import com.xiaowei.player.data.LyricsParser
 
 class PlaybackService : Service() {
 
     companion object {
         private const val TAG = "PlaybackService"
         private const val PROGRESS_UPDATE_INTERVAL_MS = 500L
-        private const val NOTIFICATION_REBUILD_INTERVAL_MS = 1000L
+        private const val PAUSE_DISMISS_DELAY_MS = 120_000L
+
+        @Volatile
+        var isRunning = false
+            private set
 
         const val ACTION_PLAY = "com.xiaowei.player.ACTION_PLAY"
         const val ACTION_PAUSE = "com.xiaowei.player.ACTION_PAUSE"
@@ -71,19 +77,81 @@ class PlaybackService : Service() {
         }
     }
 
-    private var lastNotificationRebuildTime: Long = 0L
     private var lastNotificationSongId: Long = -1L
+    private var lyricSongId: Long = -1L
+    private var lyricRawText: String? = null
+    private var lyricLines: List<LyricLine> = emptyList()
+    private var lastPostedStatusLyric: String? = null
+    private var lastPostedIsPlaying: Boolean = false
+    private var lastPostedPlayMode: MusicPlayerManager.PlayMode = MusicPlayerManager.PlayMode.SEQUENCE
+    private var lastPostedIsFavorite: Boolean = false
+    private var notificationCurrentlyPosted: Boolean = false
 
-    private var hadPlayedInBackground = false
+    private fun rememberPostedNotification(
+        songId: Long,
+        isPlaying: Boolean,
+        playMode: MusicPlayerManager.PlayMode,
+        isFavorite: Boolean,
+        lyricText: String?
+    ) {
+        lastNotificationSongId = songId
+        lastPostedStatusLyric = lyricText
+        lastPostedIsPlaying = isPlaying
+        lastPostedPlayMode = playMode
+        lastPostedIsFavorite = isFavorite
+        notificationCurrentlyPosted = true
+    }
+
+    private fun currentStatusLyricText(position: Long): String? {
+        if (!::playerManager.isInitialized) return null
+        val song = playerManager.state.value.currentSong ?: return null
+        val raw = song.lyrics
+        if (raw.isNullOrBlank()) {
+            lyricLines = emptyList()
+            return song.title
+        }
+        if (song.id != lyricSongId || raw != lyricRawText) {
+            lyricSongId = song.id
+            lyricRawText = raw
+            lyricLines = LyricsParser.parse(raw)
+        }
+        if (lyricLines.isEmpty()) return song.title
+        val idx = LyricsParser.findCurrentLine(lyricLines, position)
+        if (idx < 0) return song.title
+        val text = lyricLines.getOrNull(idx)?.text?.trim().orEmpty()
+        return text.ifBlank { song.title }
+    }
+
+    private val pauseDismissHandler = Handler(Looper.getMainLooper())
+    private var pauseDismissScheduled = false
+    private val pauseDismissRunnable = Runnable {
+        if (::playerManager.isInitialized && !playerManager.state.value.isPlaying) {
+            removeNotificationAndStop()
+        }
+    }
+
+    private fun schedulePauseDismiss() {
+        if (pauseDismissScheduled) return
+        pauseDismissScheduled = true
+        pauseDismissHandler.postDelayed(pauseDismissRunnable, PAUSE_DISMISS_DELAY_MS)
+    }
+
+    private fun cancelPauseDismiss() {
+        if (!pauseDismissScheduled) return
+        pauseDismissScheduled = false
+        pauseDismissHandler.removeCallbacks(pauseDismissRunnable)
+    }
 
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Service created")
+        isRunning = true
 
         createNotificationChannel()
 
         val placeholder = buildPlaceholderNotification()
         startServiceForeground(this, MusicNotificationManager.NOTIFICATION_ID, placeholder)
+        notificationCurrentlyPosted = true
 
         ProcessLifecycleOwner.get().lifecycle.addObserver(appLifecycleObserver)
         isAppInForeground = ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
@@ -91,11 +159,11 @@ class PlaybackService : Service() {
         val app = applicationContext as ShuYinApp
         playerManager = app.playerManager
         notificationManager = MusicNotificationManager(this, playerManager.mediaSession)
-        notificationManager.isAppInForeground = { isAppInForeground }
+        notificationManager.notificationActive = { notificationCurrentlyPosted }
 
         setupMediaSessionCallback()
 
-        updateNotificationIfNeeded(forceRebuild = true)
+        updateNotificationIfNeeded()
 
         progressHandler.post(progressRunnable)
     }
@@ -118,26 +186,27 @@ class PlaybackService : Service() {
     }
 
     private fun shouldShowNotification(): Boolean {
-        if (isAppInForeground) return false
-        val song = if (::playerManager.isInitialized) playerManager.state.value.currentSong else null
-        if (song == null) return false
-        val isPlaying = playerManager.state.value.isPlaying
-        if (isPlaying) {
-            hadPlayedInBackground = true
+        if (!::playerManager.isInitialized) return false
+        playerManager.state.value.currentSong ?: return false
+        if (playerManager.state.value.isPlaying) {
+            cancelPauseDismiss()
             return true
         }
-
-        return hadPlayedInBackground
+        if (isAppInForeground) {
+            cancelPauseDismiss()
+            return false
+        }
+        schedulePauseDismiss()
+        return true
     }
 
     private fun handleAppForeground() {
         if (isAppInForeground) return
         isAppInForeground = true
 
-        hadPlayedInBackground = false
         Log.d(TAG, "App → foreground — detaching notification")
 
-        updateNotificationIfNeeded(forceRebuild = true)
+        updateNotificationIfNeeded()
     }
 
     private fun handleAppBackground() {
@@ -145,11 +214,11 @@ class PlaybackService : Service() {
         isAppInForeground = false
         Log.d(TAG, "App → background — evaluating notification")
 
-        updateNotificationIfNeeded(forceRebuild = true)
+        updateNotificationIfNeeded()
 
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isAppInForeground) {
-                updateNotificationIfNeeded(forceRebuild = true)
+                updateNotificationIfNeeded()
             }
         }, 200)
     }
@@ -177,7 +246,7 @@ class PlaybackService : Service() {
             } catch (_: Exception) {}
         }
 
-        updateNotificationIfNeeded(forceRebuild = true)
+        updateNotificationIfNeeded()
 
         if (!shouldShowNotification() &&
             (::playerManager.isInitialized && playerManager.state.value.currentSong == null)) {
@@ -225,10 +294,10 @@ class PlaybackService : Service() {
 
     private fun setupMediaSessionCallback() {
         playerManager.mediaSession.setCallback(object : android.support.v4.media.session.MediaSessionCompat.Callback() {
-            override fun onPlay() { playerManager.togglePlayPause(); updateNotificationIfNeeded(forceRebuild = true) }
-            override fun onPause() { playerManager.togglePlayPause(); updateNotificationIfNeeded(forceRebuild = true) }
-            override fun onSkipToNext() { playerManager.skipToNext(); updateNotificationIfNeeded(forceRebuild = true) }
-            override fun onSkipToPrevious() { playerManager.skipToPrevious(); updateNotificationIfNeeded(forceRebuild = true) }
+            override fun onPlay() { if (!isRunning) try { PlaybackService.startService(applicationContext) } catch (_: Exception) {} ; playerManager.togglePlayPause(); updateNotificationIfNeeded() }
+            override fun onPause() { playerManager.togglePlayPause(); updateNotificationIfNeeded() }
+            override fun onSkipToNext() { if (!isRunning) try { PlaybackService.startService(applicationContext) } catch (_: Exception) {} ; playerManager.skipToNext(); updateNotificationIfNeeded() }
+            override fun onSkipToPrevious() { if (!isRunning) try { PlaybackService.startService(applicationContext) } catch (_: Exception) {} ; playerManager.skipToPrevious(); updateNotificationIfNeeded() }
             override fun onSeekTo(pos: Long) {
                 playerManager.seekTo(pos)
                 notificationManager.onSeekTo(pos, playerManager.state.value.isPlaying)
@@ -242,6 +311,14 @@ class PlaybackService : Service() {
             (applicationContext as ShuYinApp).favoriteRepo.isFavoriteSync(songId)
         } catch (_: Exception) {
             false
+        }
+    }
+
+    private fun postForegroundNotification(notification: Notification) {
+        if (notificationCurrentlyPosted) {
+            notificationManager.postNotification(notification)
+        } else {
+            startServiceForeground(this, MusicNotificationManager.NOTIFICATION_ID, notification)
         }
     }
 
@@ -270,43 +347,52 @@ class PlaybackService : Service() {
             )
 
             if (!shouldShowNotification()) {
-                removeNotificationOnly()
+                removeNotificationAndStop()
                 return
             }
 
-            val songChanged = song!!.id != lastNotificationSongId
-            val now = System.currentTimeMillis()
-            val timeSinceRebuild = now - lastNotificationRebuildTime
+            val playMode = playerManager.state.value.playMode
+            val isFavorite = currentFavoriteState(song!!.id)
+            val songChanged = song.id != lastNotificationSongId
 
             if (songChanged) {
+                val statusText = currentStatusLyricText(position)
                 val notification = notificationManager.buildNotification(
                     song = song,
                     isPlaying = isPlaying,
-                    playMode = playerManager.state.value.playMode,
-                    isFavorite = currentFavoriteState(song.id),
+                    playMode = playMode,
+                    isFavorite = isFavorite,
                     currentPosition = position,
-                    duration = dur
+                    duration = dur,
+                    lyricText = statusText
                 )
-                startServiceForeground(this, MusicNotificationManager.NOTIFICATION_ID, notification)
-                lastNotificationSongId = song.id
-                lastNotificationRebuildTime = now
-            } else if (timeSinceRebuild >= NOTIFICATION_REBUILD_INTERVAL_MS) {
-                notificationManager.updateNotification(
-                    song = song,
-                    isPlaying = isPlaying,
-                    playMode = playerManager.state.value.playMode,
-                    isFavorite = currentFavoriteState(song.id),
-                    currentPosition = position,
-                    duration = dur
-                )
-                lastNotificationRebuildTime = now
+                postForegroundNotification(notification)
+                rememberPostedNotification(song.id, isPlaying, playMode, isFavorite, statusText)
+            } else {
+                val statusText = currentStatusLyricText(position)
+                if (statusText != lastPostedStatusLyric ||
+                    isPlaying != lastPostedIsPlaying ||
+                    playMode != lastPostedPlayMode ||
+                    isFavorite != lastPostedIsFavorite
+                ) {
+                    notificationManager.updateNotification(
+                        song = song,
+                        isPlaying = isPlaying,
+                        playMode = playMode,
+                        isFavorite = isFavorite,
+                        currentPosition = position,
+                        duration = dur,
+                        lyricText = statusText
+                    )
+                    rememberPostedNotification(song.id, isPlaying, playMode, isFavorite, statusText)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error in periodic progress update: ${e.message}")
         }
     }
 
-    private fun updateNotificationIfNeeded(forceRebuild: Boolean = false) {
+    private fun updateNotificationIfNeeded() {
         try {
             if (!::playerManager.isInitialized) return
 
@@ -324,25 +410,29 @@ class PlaybackService : Service() {
             )
 
             if (shouldShowNotification()) {
-
-                val notification = notificationManager.buildNotification(
-                    song = song!!,
-                    isPlaying = isPlaying,
-                    playMode = playerManager.state.value.playMode,
-                    isFavorite = currentFavoriteState(song.id),
-                    currentPosition = position,
-                    duration = dur
-                )
-                startServiceForeground(this, MusicNotificationManager.NOTIFICATION_ID, notification)
-                lastNotificationSongId = song.id
-                lastNotificationRebuildTime = System.currentTimeMillis()
-            } else {
-
-                removeNotificationOnly()
-
-                if (song == null) {
-                    stopSelf()
+                val statusText = currentStatusLyricText(position)
+                val playMode = playerManager.state.value.playMode
+                val isFavorite = currentFavoriteState(song!!.id)
+                val changed = song.id != lastNotificationSongId ||
+                    statusText != lastPostedStatusLyric ||
+                    isPlaying != lastPostedIsPlaying ||
+                    playMode != lastPostedPlayMode ||
+                    isFavorite != lastPostedIsFavorite
+                if (!notificationCurrentlyPosted || changed) {
+                    val notification = notificationManager.buildNotification(
+                        song = song,
+                        isPlaying = isPlaying,
+                        playMode = playMode,
+                        isFavorite = isFavorite,
+                        currentPosition = position,
+                        duration = dur,
+                        lyricText = statusText
+                    )
+                    postForegroundNotification(notification)
+                    rememberPostedNotification(song.id, isPlaying, playMode, isFavorite, statusText)
                 }
+            } else {
+                removeNotificationAndStop()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error updating notification: ${e.message}")
@@ -360,6 +450,7 @@ class PlaybackService : Service() {
         if (::notificationManager.isInitialized) {
             notificationManager.cancelNotification()
         }
+        notificationCurrentlyPosted = false
     }
 
     private fun removeNotificationAndStop() {
@@ -386,6 +477,8 @@ class PlaybackService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
+        cancelPauseDismiss()
         ProcessLifecycleOwner.get().lifecycle.removeObserver(appLifecycleObserver)
         stopPeriodicUpdates()
         Log.d(TAG, "Service destroyed")

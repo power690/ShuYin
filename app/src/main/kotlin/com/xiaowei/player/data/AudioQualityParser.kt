@@ -58,6 +58,7 @@ object AudioQualityParser {
             "m4a", "mp4" -> parseMp4(data)
             "ogg", "oga" -> parseOgg(data)
             "opus" -> parseOgg(data)
+            "ape" -> parseApe(trimId3v2(data))
             else -> null
         }
         if (info != null) {
@@ -101,6 +102,54 @@ object AudioQualityParser {
         val start = 10 + tagSize
         if (start >= 1 && start < data.size) return data.copyOfRange(start.toInt(), data.size)
         return data
+    }
+
+    private fun parseApe(head: ByteArray): AudioInfo? {
+        if (head.size < 32) return null
+        val magicOffset = findApeMagic(head) ?: return null
+        val version = ((head[magicOffset + 4].toInt() and 0xFF) or ((head[magicOffset + 5].toInt() and 0xFF) shl 8))
+        if (version !in 1000..9999) return null
+        if (version >= 3980) {
+            if (head.size < magicOffset + 52) return null
+            val descriptorBytes = readU32LE(head, magicOffset + 8).toInt()
+            if (descriptorBytes < 52 || descriptorBytes > 4096) return null
+            val h = magicOffset + descriptorBytes
+            if (h + 24 > head.size) return null
+            val bits = readU16LE(head, h + 16)
+            val sampleRate = readU32LE(head, h + 20).toInt()
+            if (sampleRate in 8000..768000 && bits in 8..32) {
+                return AudioInfo(sampleRate, bits, true, 0)
+            }
+            return null
+        }
+        if (magicOffset + 16 > head.size) return null
+        val formatFlags = readU16LE(head, magicOffset + 8)
+        val sampleRate = readU32LE(head, magicOffset + 12).toInt()
+        val bits = when {
+            (formatFlags and 1) != 0 -> 8
+            (formatFlags and 8) != 0 -> 24
+            else -> 16
+        }
+        if (sampleRate in 8000..768000) {
+            return AudioInfo(sampleRate, bits, true, 0)
+        }
+        return null
+    }
+
+    private fun findApeMagic(head: ByteArray): Int? {
+        val limit = head.size - 6
+        var i = 0
+        while (i <= limit) {
+            if ((head[i].toInt() and 0xFF) == 'M'.code &&
+                (head[i + 1].toInt() and 0xFF) == 'A'.code &&
+                (head[i + 2].toInt() and 0xFF) == 'C'.code &&
+                ((head[i + 3].toInt() and 0xFF) == ' '.code || (head[i + 3].toInt() and 0xFF) == 'F'.code)
+            ) {
+                return i
+            }
+            i++
+        }
+        return null
     }
 
     private fun parseFlac(body: ByteArray): AudioInfo? {

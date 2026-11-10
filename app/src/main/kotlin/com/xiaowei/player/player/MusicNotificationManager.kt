@@ -42,6 +42,13 @@ class MusicNotificationManager(
         const val ACTION_CLOSE = "com.xiaowei.player.ACTION_CLOSE"
         const val ACTION_CYCLE_PLAY_MODE = "com.xiaowei.player.ACTION_CYCLE_PLAY_MODE"
         const val ACTION_TOGGLE_FAVORITE = "com.xiaowei.player.ACTION_TOGGLE_FAVORITE"
+
+        private val FLYME_FLAG_ALWAYS_SHOW_TICKER = try {
+            Notification::class.java.getField("FLAG_ALWAYS_SHOW_TICKER").getInt(null)
+        } catch (_: Exception) { 0 }
+        private val FLYME_FLAG_ONLY_UPDATE_TICKER = try {
+            Notification::class.java.getField("FLAG_ONLY_UPDATE_TICKER").getInt(null)
+        } catch (_: Exception) { 0 }
     }
 
     private val notificationManager =
@@ -50,7 +57,7 @@ class MusicNotificationManager(
     private var lastLoadedArtUri: String? = null
     private var albumArtLoadJob: Job? = null
 
-    var isAppInForeground: () -> Boolean = { true }
+    var notificationActive: () -> Boolean = { true }
 
     private data class CachedNotificationParams(
         val song: Song?,
@@ -64,6 +71,7 @@ class MusicNotificationManager(
     private var lastSafeDuration: Long = 0L
     private var pendingSeekPositionMs: Long = -1L
     private var pendingSeekAtElapsed: Long = 0L
+    private var currentStatusLyric: String? = null
 
     private fun resolveDisplayPosition(rawPosition: Long): Long {
         val target = pendingSeekPositionMs
@@ -161,7 +169,8 @@ class MusicNotificationManager(
         playMode: MusicPlayerManager.PlayMode,
         isFavorite: Boolean,
         currentPosition: Long,
-        duration: Long
+        duration: Long,
+        lyricText: String? = null
     ): Notification {
         val songId = song?.id ?: -1L
         if (songId != trackedSongId) {
@@ -230,6 +239,9 @@ class MusicNotificationManager(
                 } else {
                     setProgress(0, 0, true)
                 }
+                if (lyricText != null) {
+                    setTicker(lyricText)
+                }
             }
 
             .addAction(modeIcon, modeText, getServicePendingIntent(ACTION_CYCLE_PLAY_MODE))
@@ -243,7 +255,24 @@ class MusicNotificationManager(
             .addAction(favIcon, favText, getServicePendingIntent(ACTION_TOGGLE_FAVORITE))
 
         updateMediaSessionMetadata(song, safeDuration)
-        return builder.build()
+        val notification = builder.build()
+        currentStatusLyric = lyricText
+        if (FLYME_FLAG_ALWAYS_SHOW_TICKER != 0 && FLYME_FLAG_ONLY_UPDATE_TICKER != 0) {
+            if (lyricText != null) {
+                notification.extras.putInt("ticker_icon", R.drawable.ic_flyme_lyric_note)
+                notification.extras.putBoolean("ticker_icon_switch", false)
+                notification.flags = notification.flags or
+                        FLYME_FLAG_ALWAYS_SHOW_TICKER or
+                        FLYME_FLAG_ONLY_UPDATE_TICKER or
+                        Notification.FLAG_NO_CLEAR
+            } else {
+                notification.flags = notification.flags and
+                        FLYME_FLAG_ALWAYS_SHOW_TICKER.inv() and
+                        FLYME_FLAG_ONLY_UPDATE_TICKER.inv() and
+                        Notification.FLAG_NO_CLEAR.inv()
+            }
+        }
+        return notification
     }
 
     fun updateNotification(
@@ -252,9 +281,14 @@ class MusicNotificationManager(
         playMode: MusicPlayerManager.PlayMode,
         isFavorite: Boolean,
         currentPosition: Long,
-        duration: Long
+        duration: Long,
+        lyricText: String? = null
     ) {
-        val notification = buildNotification(song, isPlaying, playMode, isFavorite, currentPosition, duration)
+        val notification = buildNotification(song, isPlaying, playMode, isFavorite, currentPosition, duration, lyricText)
+        notificationManager.notify(NOTIFICATION_ID, notification)
+    }
+
+    fun postNotification(notification: Notification) {
         notificationManager.notify(NOTIFICATION_ID, notification)
     }
 
@@ -302,7 +336,7 @@ class MusicNotificationManager(
                 if (bitmap != null && isActive) {
                     currentLargeIcon = bitmap
                     lastLoadedArtUri = songData
-                    if (isAppInForeground()) return@launch
+                    if (!notificationActive()) return@launch
                     cachedParams?.let { params ->
                         val currentPos = try {
                             (mediaSession.controller?.playbackState?.position ?: 0L)
@@ -310,7 +344,7 @@ class MusicNotificationManager(
                         } catch (_: Exception) { 0L }
                         val notification = buildNotification(
                             params.song, params.isPlaying, params.playMode, params.isFavorite,
-                            currentPos, lastSafeDuration
+                            currentPos, lastSafeDuration, currentStatusLyric
                         )
                         notificationManager.notify(NOTIFICATION_ID, notification)
                     }

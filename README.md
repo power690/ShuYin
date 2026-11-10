@@ -5,7 +5,7 @@
 ## ✨ 功能特性
 
 ### 🎵 音乐播放
-- **FLAC 无损解码**：使用 HeHang0 预编译的 ExoPlayer FLAC 扩展（基于 libFLAC native 解码），不依赖系统 MediaCodec，魔改 ROM 也能完美播放 FLAC
+- **FLAC 无损解码**：内置源码编译的 ExoPlayer FLAC 扩展（基于 libFLAC native 解码，16KB 页大小对齐），不依赖系统 MediaCodec，魔改 ROM 也能完美播放 FLAC
 - **全格式支持**：MP3 / FLAC / OGG / M4A / AAC / WAV / OPUS
 - **播放队列管理**：支持播放列表、循环模式（顺序/单曲/随机）、上一首/下一首
 - **播放状态恢复**：杀后台后重启自动恢复上次播放位置和队列
@@ -78,7 +78,7 @@
 |------|------|
 | **UI** | Jetpack Compose + Material 3 |
 | **播放器** | AndroidX Media3 (ExoPlayer) |
-| **FLAC 解码** | HeHang0 预编译的 ExoPlayer FLAC 扩展（libFLAC native）|
+| **FLAC 解码** | 源码内置编译的 libFLAC（AndroidX Media3 FLAC 扩展）|
 | **液态玻璃** | Kyant0 Backdrop / AndroidLiquidGlass（Compose Liquid Glass）|
 | **标题栏模糊** | Haze（Compose 毛玻璃实时模糊，Android 12+）|
 | **数据库** | Room（收藏 / 搜索历史 / 播放状态 / 桌面歌词设置 / 用户资料）|
@@ -91,7 +91,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v3.0.0.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v3.3.0.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
@@ -162,7 +162,8 @@ python3 i18n_helper.py list                     # 列出所有 key
 ### 第三方依赖协议
 本项目使用的第三方库协议如下：
 - Jetpack Compose / Media3 / Room / Coil：Apache License 2.0
-- HeHang0 ExoPlayer FLAC 扩展：Apache License 2.0
+- libFLAC（Xiph.Org）：BSD 3-Clause 许可证
+- ExoPlayer FLAC 扩展（AndroidX Media3 decoder_flac）：Apache License 2.0
 - Kyant0 Backdrop 液态玻璃库（AndroidLiquidGlass）：Apache License 2.0
 - Haze 模糊库（dev.chrisbanes.haze）：Apache License 2.0
 - mp3agic：MIT License
@@ -187,7 +188,10 @@ python3 i18n_helper.py list                     # 列出所有 key
 - [Haze](https://github.com/chrisbanes/haze) - 标题栏滚动毛玻璃模糊效果（Chris Banes）
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - 二级页面转场动画方案
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - 部分代码参考
-- [HeHang0](https://github.com/HeHang0) - ExoPlayer FLAC 扩展预编译版
+- [Xiph.Org libFLAC](https://xiph.org/flac/) - FLAC 无损解码核心（BSD 3-Clause），源码内置编译
+- [HeHang0](https://github.com/HeHang0) - 早期版本提供 ExoPlayer FLAC 扩展预编译包
+- [media3-decoder-ape](https://github.com/eugenedibtsev/media3-decoder-ape) - APE（Monkey's Audio）的 Media3 扩展解码器（eugenedibtsev），提供容器解析、PCM 解码与 MACLib 的 JNI 桥接
+- [Monkey's Audio (MACLib)](https://www.monkeysaudio.com/) - APE 格式的官方解码核心（Matthew T. Ashland，BSD 3-Clause）
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) - 声明式 UI 框架
 - [AndroidX Media3](https://developer.android.com/media/media3) - 媒体播放库
 - [Coil](https://coil-kt.github.io/coil/) - 图片加载库
@@ -195,7 +199,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 📊 项目状态
 
-- **当前版本**：v3.0.0
+- **当前版本**：v3.3.0
 - **最低支持**：Android 6.0 (API 23)
 - **目标版本**：Android 17 (API 37)
 
@@ -208,7 +212,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## ✨ Features
 
 ### 🎵 Music Playback
-- **FLAC Lossless Decoding**: Uses HeHang0's precompiled ExoPlayer FLAC extension (based on libFLAC native decoding), independent of system MediaCodec - works perfectly even on modified ROMs
+- **FLAC Lossless Decoding**: Source-built ExoPlayer FLAC extension (libFLAC native decoding, 16KB page size aligned), independent of system MediaCodec - works perfectly even on modified ROMs
 - **Full Format Support**: MP3 / FLAC / OGG / M4A / AAC / WAV / OPUS
 - **Queue Management**: Playlist, loop modes (sequence / single / shuffle), previous / next
 - **State Restoration**: Auto-restore last playback position and queue after restart
@@ -281,7 +285,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 |----------|-----------|
 | **UI** | Jetpack Compose + Material 3 |
 | **Player** | AndroidX Media3 (ExoPlayer) |
-| **FLAC Decoding** | HeHang0's precompiled ExoPlayer FLAC extension (libFLAC native) |
+| **FLAC Decoding** | Source-built libFLAC (AndroidX Media3 FLAC extension) |
 | **Liquid Glass** | Kyant0 Backdrop / AndroidLiquidGlass (Compose Liquid Glass) |
 | **Title Bar Blur** | Haze (Compose real-time frosted blur, Android 12+) |
 | **Database** | Room (favorites / search history / playback state / desktop lyrics settings / user profile) |
@@ -294,7 +298,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## 📦 Download & Install
 
 ### Option 1: Download APK
-Go to the [Release](../../releases) page to download the latest `ShuYin-release-v3.0.0.apk` and install directly.
+Go to the [Release](../../releases) page to download the latest `ShuYin-release-v3.3.0.apk` and install directly.
 
 ### Option 2: Build from Source
 ```bash
@@ -364,7 +368,8 @@ See the [LICENSE](LICENSE) file or [GNU GPL-3.0 official site](https://www.gnu.o
 
 ### Third-party License
 - Jetpack Compose / Media3 / Room / Coil: Apache License 2.0
-- HeHang0 ExoPlayer FLAC extension: Apache License 2.0
+- libFLAC (Xiph.Org): BSD 3-Clause License
+- ExoPlayer FLAC extension (AndroidX Media3 decoder_flac): Apache License 2.0
 - Kyant0 Backdrop liquid glass library (AndroidLiquidGlass): Apache License 2.0
 - Haze blur library (dev.chrisbanes.haze): Apache License 2.0
 - mp3agic: MIT License
@@ -389,7 +394,10 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 - [Haze](https://github.com/chrisbanes/haze) - Title bar scroll frosted blur effect (by Chris Banes)
 - [SPICaMusic_Android](https://github.com/yangSpica27/SPICaMusic_Android.git) - Secondary page transition animation solution
 - [jianyin](https://github.com/qianqianhhh2/jianyin.git) - Partial code reference
-- [HeHang0](https://github.com/HeHang0) - Precompiled ExoPlayer FLAC extension
+- [Xiph.Org libFLAC](https://xiph.org/flac/) - FLAC lossless decoding core (BSD 3-Clause), built from bundled source
+- [HeHang0](https://github.com/HeHang0) - Provided precompiled ExoPlayer FLAC extension in early versions
+- [media3-decoder-ape](https://github.com/eugenedibtsev/media3-decoder-ape) - APE (Monkey's Audio) extension decoder for Media3 (by eugenedibtsev), providing container parsing, PCM decoding and the MACLib JNI bridge
+- [Monkey's Audio (MACLib)](https://www.monkeysaudio.com/) - Official APE decoding core by Matthew T. Ashland (BSD 3-Clause)
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) - Declarative UI framework
 - [AndroidX Media3](https://developer.android.com/media/media3) - Media playback library
 - [Coil](https://coil-kt.github.io/coil/) - Image loading library
@@ -397,7 +405,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 📊 Project Status
 
-- **Current Version**: v3.0.0
+- **Current Version**: v3.3.0
 - **Min Support**: Android 6.0 (API 23)
 - **Target Version**: Android 17 (API 37)
 ```

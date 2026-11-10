@@ -3,9 +3,11 @@ package com.xiaowei.player.ui.screens
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -67,6 +69,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -93,6 +96,8 @@ import com.xiaowei.player.data.ThemePrefs
 import com.xiaowei.player.i18n.Strings
 import com.xiaowei.player.ui.components.M3ExpressiveSwitch
 import com.xiaowei.player.ui.theme.PRESET_THEME_COLORS
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import java.io.File
 
 private enum class WizardPage {
@@ -441,6 +446,8 @@ fun SetupWizardScreen(onFinish: (File?) -> Unit) {
     var step by rememberSaveable { mutableIntStateOf(0) }
     var navDirection by remember { mutableIntStateOf(1) }
     var pendingBackup by remember { androidx.compose.runtime.mutableStateOf<File?>(null) }
+    val wizardBackProgress = remember { Animatable(0f) }
+    val wizardScope = rememberCoroutineScope()
 
     val navigateBack = {
         navDirection = -1
@@ -449,7 +456,31 @@ fun SetupWizardScreen(onFinish: (File?) -> Unit) {
         pendingBackup = null
     }
 
-    BackHandler(enabled = step > 0) { navigateBack() }
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        PredictiveBackHandler(enabled = step > 0) { progress ->
+            try {
+                progress.collect { event ->
+                    wizardBackProgress.snapTo(event.progress.coerceIn(0f, 1f))
+                }
+                wizardScope.launch {
+                    wizardBackProgress.animateTo(0f, tween(120))
+                }
+                navigateBack()
+            } catch (e: CancellationException) {
+                wizardScope.launch {
+                    wizardBackProgress.animateTo(
+                        0f,
+                        spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                }
+            }
+        }
+    } else {
+        BackHandler(enabled = step > 0) { navigateBack() }
+    }
 
     Box(
         modifier = Modifier
@@ -468,7 +499,14 @@ fun SetupWizardScreen(onFinish: (File?) -> Unit) {
             targetState = step,
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f),
+                .weight(1f)
+                .graphicsLayer {
+                    val p = wizardBackProgress.value
+                    translationX = -p * size.width * 0.3f
+                    val s = 1f - 0.06f * p
+                    scaleX = s
+                    scaleY = s
+                },
             transitionSpec = {
                 val direction = navDirection
                 val enter = slideInHorizontally(tween(260)) { it / 5 * direction } + fadeIn(tween(260))

@@ -2,6 +2,7 @@ package com.xiaowei.player.navkit
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import kotlin.math.pow
 
 const val STACK_SPRING_STIFFNESS = 300f
 
@@ -18,6 +19,11 @@ const val COMPRESS_SCALE_MIN = 0.74f
 const val COMPRESS_TRANSLATE_FRACTION = 0.06f
 
 const val BLUR_MAX_DP = 24f
+
+const val BLUR_FALLOFF_EXPONENT = 2f
+
+fun stackBlurSigma(compression: Float): Float =
+    BLUR_MAX_DP * compression.coerceIn(0f, 1f).pow(BLUR_FALLOFF_EXPONENT)
 
 const val ENTER_RADIUS_DP = 28f
 

@@ -473,7 +473,10 @@ class MainActivity : ComponentActivity() {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
         } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
         }
     }
 
@@ -589,7 +592,9 @@ class MainActivity : ComponentActivity() {
         if (isChangingConfigurations) return
         val state = viewModel.playerManager.state.value
         if (state.currentSong != null && state.isPlaying) {
-            PlaybackService.startService(this)
+            if (!PlaybackService.isRunning) {
+                PlaybackService.startService(this)
+            }
         }
     }
 

@@ -9,6 +9,7 @@ import com.xiaowei.player.data.CustomPathPrefs
 import com.xiaowei.player.data.FavoriteRepository
 import com.xiaowei.player.data.MusicRepository
 import com.xiaowei.player.data.RecommendCard
+import com.xiaowei.player.data.RecommendPriorityPrefs
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.data.WebDavMusicSource
 import com.xiaowei.player.data.WebDavPrefs
@@ -31,42 +32,61 @@ data class LibraryState(
     val hotAlbums: List<Album> = emptyList(),
     val hotArtists: List<Artist> = emptyList(),
     val searchQuery: String = "",
-
     val favoriteIds: Set<Long> = emptySet(),
-
     val favoriteVersion: Int = 0,
-
     val artistSongMap: Map<String, List<Song>> = emptyMap(),
-
     val webDavActive: Boolean = false,
-    val webDavErrorKey: String = ""
+    val webDavErrorKey: String = "",
+    val webDavSongs: List<Song> = emptyList(),
+    val activeSongs: List<Song> = emptyList(),
 ) {
     val filteredSongs: List<Song>
         get() {
             val q = searchQuery.trim()
-            return if (q.isEmpty()) songs
-            else songs.filter {
-                it.title.contains(q, true) ||
-                it.artist.contains(q, true) ||
-                it.album.contains(q, true)
+            return if (q.isEmpty()) {
+                songs
+            } else {
+                songs.filter {
+                    it.title.contains(q, true) ||
+                        it.artist.contains(q, true) ||
+                        it.album.contains(q, true)
+                }
             }
         }
     val filteredArtists: List<Artist>
         get() {
             val q = searchQuery.trim()
-            return if (q.isEmpty()) artists
-            else artists.filter { it.displayName.contains(q, true) }
+            return if (q.isEmpty()) {
+                artists
+            } else {
+                artists.filter { it.displayName.contains(q, true) }
+            }
         }
     val filteredAlbums: List<Album>
         get() {
             val q = searchQuery.trim()
-            return if (q.isEmpty()) albums
-            else albums.filter { it.displayName.contains(q, true) || it.displayArtist.contains(q, true) }
+            return if (q.isEmpty()) {
+                albums
+            } else {
+                albums.filter { it.displayName.contains(q, true) || it.displayArtist.contains(q, true) }
+            }
+        }
+    val filteredWebDavSongs: List<Song>
+        get() {
+            val q = searchQuery.trim()
+            return if (q.isEmpty()) {
+                webDavSongs
+            } else {
+                webDavSongs.filter {
+                    it.title.contains(q, true) || it.artist.contains(q, true) || it.album.contains(q, true)
+                }
+            }
         }
 }
 
-class MainViewModel(app: Application) : AndroidViewModel(app) {
-
+class MainViewModel(
+    app: Application,
+) : AndroidViewModel(app) {
     private val repo = MusicRepository(app)
     private val webDavSource = WebDavMusicSource(app)
     private val favoriteRepo = (app as ShuYinApp).favoriteRepo
@@ -80,7 +100,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
 
-        _library.value = _library.value.copy(favoriteIds = favoriteRepo.getFavoriteIdsSync(), webDavActive = WebDavPrefs.get(app).activeAccount() != null)
+        _library.value =
+            _library.value.copy(
+                favoriteIds = favoriteRepo.getFavoriteIdsSync(),
+                webDavActive = WebDavPrefs.get(app).activeAccount() != null,
+            )
 
         (app as ShuYinApp).onNotificationToggleFavorite = { songId ->
             toggleFavorite(songId)
@@ -94,57 +118,77 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refresh(forceRescan: Boolean = false) {
         refreshJob?.cancel()
-        refreshJob = viewModelScope.launch {
-            val webDavAccount = WebDavPrefs.get(getApplication()).activeAccount()
-            _library.value = _library.value.copy(isLoading = true, webDavActive = webDavAccount != null)
+        refreshJob =
+            viewModelScope.launch {
+                val webDavAccount = WebDavPrefs.get(getApplication()).activeAccount()
+                _library.value = _library.value.copy(isLoading = true, webDavActive = webDavAccount != null)
 
-            var webDavError = ""
-            val songs = withTimeoutOrNull(600_000L) {
-                if (webDavAccount != null) {
-                    val result = webDavSource.loadSongs(webDavAccount, forceRescan)
-                    webDavError = result.errorKey
-                    result.songs
-                } else {
-                    val customPath = CustomPathPrefs.get(getApplication()).path.trim()
-                    if (customPath.isNotBlank()) {
-                        repo.loadMusicFromPath(customPath)
+                var webDavError = ""
+                val localSongs =
+                    withTimeoutOrNull(600_000L) {
+                        val customPath = CustomPathPrefs.get(getApplication()).path.trim()
+                        if (customPath.isNotBlank()) {
+                            repo.loadMusicFromPath(customPath)
+                        } else {
+                            repo.loadAllMusic()
+                        }
+                    } ?: emptyList()
+                val webDavSongs =
+                    if (webDavAccount != null) {
+                        withTimeoutOrNull(600_000L) {
+                            val result = webDavSource.loadSongs(webDavAccount, forceRescan)
+                            webDavError = result.errorKey
+                            result.songs
+                        } ?: emptyList()
                     } else {
-                        repo.loadAllMusic()
+                        emptyList()
+                    }
+
+                val priority = RecommendPriorityPrefs.get(getApplication()).priority
+                val recommendPool =
+                    when {
+                        priority == RecommendPriorityPrefs.PRIORITY_NETWORK && webDavSongs.isNotEmpty() -> webDavSongs
+                        priority == RecommendPriorityPrefs.PRIORITY_MIXED && webDavSongs.isNotEmpty() -> localSongs + webDavSongs
+                        else -> localSongs
+                    }
+
+                val (artists, artistSongMap) = repo.buildArtists(recommendPool)
+                val albums = repo.buildAlbums(recommendPool)
+
+                val recommends = repo.buildRecommendCards(recommendPool, artists, albums, artistSongMap)
+                val hotAlbums = albums.shuffled().take(10)
+                val hotArtists = artists.shuffled().take(10)
+
+                if (localSongs.isNotEmpty() || webDavSongs.isNotEmpty() || webDavAccount == null) {
+                    com.xiaowei.player.data
+                        .updateSongCountSnapshot(getApplication(), localSongs.size + webDavSongs.size)
+                }
+
+                _library.value =
+                    _library.value.copy(
+                        isLoading = false,
+                        permissionGranted = true,
+                        songs = localSongs,
+                        webDavSongs = webDavSongs,
+                        artists = artists,
+                        albums = albums,
+                        recommends = recommends,
+                        hotAlbums = hotAlbums,
+                        hotArtists = hotArtists,
+                        artistSongMap = artistSongMap,
+                        webDavActive = webDavAccount != null,
+                        webDavErrorKey = webDavError,
+                        activeSongs = recommendPool,
+                    )
+
+                if (!hasRestoredPlayback) {
+                    hasRestoredPlayback = true
+
+                    if (playerManager.playlist.isEmpty()) {
+                        playerManager.restoreFromPrefs(localSongs + webDavSongs)
                     }
                 }
-            } ?: emptyList()
-            val (artists, artistSongMap) = repo.buildArtists(songs)
-            val albums = repo.buildAlbums(songs)
-            val recommends = repo.buildRecommendCards(songs, artists, albums, artistSongMap)
-            val hotAlbums = albums.shuffled().take(10)
-            val hotArtists = artists.shuffled().take(10)
-
-            if (!(webDavAccount != null && songs.isEmpty())) {
-                com.xiaowei.player.data.updateSongCountSnapshot(getApplication(), songs.size)
             }
-
-            _library.value = _library.value.copy(
-                isLoading = false,
-                permissionGranted = true,
-                songs = songs,
-                artists = artists,
-                albums = albums,
-                recommends = recommends,
-                hotAlbums = hotAlbums,
-                hotArtists = hotArtists,
-                artistSongMap = artistSongMap,
-                webDavActive = webDavAccount != null,
-                webDavErrorKey = webDavError
-            )
-
-            if (!hasRestoredPlayback) {
-                hasRestoredPlayback = true
-
-                if (playerManager.playlist.isEmpty()) {
-                    playerManager.restoreFromPrefs(songs)
-                }
-            }
-        }
     }
 
     fun setSearchQuery(q: String) {
@@ -153,8 +197,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshFromPath(path: String) {
         viewModelScope.launch {
-
-            if (playerManager.playlist.isNotEmpty()) {
+            if (playerManager.playlist.any { it.source != "webdav" }) {
                 playerManager.clearQueue()
             }
 
@@ -166,8 +209,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun refreshFromWebDav() {
         viewModelScope.launch {
-
-            if (playerManager.playlist.isNotEmpty()) {
+            if (playerManager.playlist.any { it.source == "webdav" }) {
                 playerManager.clearQueue()
             }
 
@@ -177,25 +219,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleFavorite(songId: Long) {
         val isFav = favoriteRepo.toggleSync(songId)
-        _library.value = _library.value.copy(
-            favoriteIds = favoriteRepo.getFavoriteIdsSync(),
-            favoriteVersion = _library.value.favoriteVersion + 1
-        )
-
+        _library.value =
+            _library.value.copy(
+                favoriteIds = favoriteRepo.getFavoriteIdsSync(),
+                favoriteVersion = _library.value.favoriteVersion + 1,
+            )
     }
 
     fun removeFavorites(songIds: List<Long>) {
         if (songIds.isEmpty()) return
         songIds.forEach { favoriteRepo.removeSync(it) }
-        _library.value = _library.value.copy(
-            favoriteIds = favoriteRepo.getFavoriteIdsSync(),
-            favoriteVersion = _library.value.favoriteVersion + 1
-        )
+        _library.value =
+            _library.value.copy(
+                favoriteIds = favoriteRepo.getFavoriteIdsSync(),
+                favoriteVersion = _library.value.favoriteVersion + 1,
+            )
     }
 
     fun isFavorite(songId: Long): Boolean = favoriteRepo.isFavoriteSync(songId)
 
-    fun playAllFrom(songs: List<Song>, song: Song) {
+    fun playAllFrom(
+        songs: List<Song>,
+        song: Song,
+    ) {
         playerManager.playAllFrom(songs, song)
     }
 
@@ -204,7 +250,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
-
         super.onCleared()
     }
 }

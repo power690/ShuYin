@@ -530,7 +530,7 @@ fun AlbumDetailScreen(
     onOpenPlayer: () -> Unit
 ) {
     val album = library.albums.firstOrNull { it.id == albumId }
-    val songs = library.songs.filter { it.albumId == albumId }
+    val songs = library.activeSongs.filter { it.albumId == albumId }
         .sortedWith(compareBy({ it.track }, { it.title }))
 
     val context = LocalContext.current

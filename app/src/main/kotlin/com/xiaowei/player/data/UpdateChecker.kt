@@ -13,6 +13,11 @@ object UpdateChecker {
     private const val UPDATE_URL_CN = "https://gitee.com/cuteqwwtr/ShuYin/raw/main/update_cn.json"
     private const val UPDATE_URL_INTL = "https://raw.githubusercontent.com/power690/ShuYin/main/update.json"
 
+    const val EXPECTED_CRC32 = "C83410D7"
+    const val EXPECTED_MD5 = "7EDE882F1DD318E0A31A1F69379F9285"
+    const val EXPECTED_SHA1 = "B3B9CDCABA0BDEA9B84C81E59A19063B6B0A9CF0"
+    const val EXPECTED_SHA256 = "2B3F166C24A97D504FA8C22568AF8DE9F315A02D1889EE06760EA6C03E84A426"
+
     private fun updateUrl(): String {
         val lang = Strings.currentLanguageCode()
         return if (lang.startsWith("zh")) UPDATE_URL_CN else UPDATE_URL_INTL
@@ -22,7 +27,8 @@ object UpdateChecker {
         val versionCode: Int,
         val versionName: String,
         val downloadUrl: String,
-        val updateLog: String
+        val updateLog: String,
+        val forceUpdate: Boolean
     )
 
     fun check(currentVersionCode: Int): UpdateInfo? {
@@ -45,7 +51,8 @@ object UpdateChecker {
                 val downloadUrl = json.optString("downloadUrl", "")
                 if (newName.isBlank() || downloadUrl.isBlank()) return null
                 val log = pickLog(json)
-                UpdateInfo(newCode, newName, downloadUrl, log)
+                val forceUpdate = json.optBoolean("forceUpdate", false)
+                UpdateInfo(newCode, newName, downloadUrl, log, forceUpdate)
             }
         } catch (e: Exception) {
             Log.w(TAG, "check update failed: ${e.message}")

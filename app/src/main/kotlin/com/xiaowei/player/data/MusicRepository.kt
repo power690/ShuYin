@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.MediaStore
 import android.util.Log
 import com.mpatric.mp3agic.Mp3File
@@ -51,14 +52,17 @@ class MusicRepository(private val context: Context) {
 
     suspend fun loadAllMusic(): List<Song> = withContext(Dispatchers.IO) {
         lrcDirCache.clear()
-        val collection = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        }
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ARTIST_ID,
             MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.ALBUM_ARTIST,
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.DATA,
@@ -70,7 +74,11 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.DISPLAY_NAME
         )
 
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        val selection = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 OR LOWER(${MediaStore.Audio.Media.MIME_TYPE}) LIKE 'audio/%'"
+        } else {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        }
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
 
         val songs = mutableListOf<Song>()
@@ -84,7 +92,6 @@ class MusicRepository(private val context: Context) {
                 val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val artistIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID)
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-                val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val albumArtistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
                 val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
@@ -98,7 +105,6 @@ class MusicRepository(private val context: Context) {
                 coroutineScope {
                     while (cursor.moveToNext()) {
                         val id = cursor.getLong(idCol)
-                        val albumId = cursor.getLong(albumIdCol)
 
                         val rawData = cursor.getString(dataCol) ?: ""
                         val data = resolveRealFilePath(rawData)
@@ -124,6 +130,21 @@ class MusicRepository(private val context: Context) {
                                 if (duration <= 0L && wavTag.durationMs > 0L) duration = wavTag.durationMs
                             }
                         }
+
+                        if (data.lowercase().endsWith(".ape")) {
+                            val apeTag = ApeMetadataParser.parse(File(data))
+                            if (apeTag != null) {
+                                apeTag.title?.let { title = it }
+                                apeTag.artist?.let { artist = it }
+                                apeTag.album?.let { album = it }
+                                apeTag.albumArtist?.let { albumArtist = it }
+                                if (year == 0 && apeTag.year > 0) year = apeTag.year
+                                if (track == 0 && apeTag.track > 0) track = apeTag.track
+                                if (duration <= 0L && apeTag.durationMs > 0L) duration = apeTag.durationMs
+                            }
+                        }
+
+                        val albumId = albumKey(album)
 
                         val lyrics = readLyrics(data, mime)
 
@@ -154,7 +175,24 @@ class MusicRepository(private val context: Context) {
             Log.e(TAG, "Failed to query MediaStore", e)
         }
 
-        val deduped = dedupeSongs(songs)
+        val apeSupplement = queryApeFilesFromMediaStore(songs)
+        songs.addAll(apeSupplement)
+
+        var deduped = dedupeSongs(songs)
+
+        if (deduped.isEmpty() && Build.VERSION.SDK_INT <= Build.VERSION_CODES.M) {
+            try {
+                val externalRoot = Environment.getExternalStorageDirectory()
+                if (externalRoot != null && externalRoot.exists() && externalRoot.isDirectory) {
+                    val fileSongs = loadMusicFromPath(externalRoot.absolutePath)
+                    if (fileSongs.isNotEmpty()) {
+                        deduped = fileSongs
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
+
         Log.i(TAG, "Loaded ${deduped.size} songs from MediaStore")
         deduped
     }
@@ -166,7 +204,7 @@ class MusicRepository(private val context: Context) {
             return@withContext emptyList()
         }
 
-        val supportedExtensions = setOf("mp3", "flac", "ogg", "m4a", "aac", "wav", "opus")
+        val supportedExtensions = setOf("mp3", "flac", "ogg", "m4a", "aac", "wav", "opus", "ape")
         val songs = mutableListOf<Song>()
 
         lrcDirCache.clear()
@@ -207,8 +245,102 @@ class MusicRepository(private val context: Context) {
         deduped
     }
 
+    private fun queryApeFilesFromMediaStore(existing: List<Song>): List<Song> {
+        val knownPaths = HashSet<String>()
+        for (song in existing) {
+            if (song.data.isNotBlank()) knownPaths.add(song.data.lowercase())
+        }
+        val result = mutableListOf<Song>()
+        try {
+            val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            } else {
+                MediaStore.Files.getContentUri("external")
+            }
+            val projection = arrayOf(
+                MediaStore.Audio.Media._ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.DATA,
+                MediaStore.Audio.Media.DATE_ADDED,
+                MediaStore.Files.FileColumns.MIME_TYPE,
+                MediaStore.Audio.Media.SIZE
+            )
+            val selection = "LOWER(${MediaStore.Audio.Media.DATA}) LIKE '%.ape' OR ${MediaStore.Files.FileColumns.MIME_TYPE} IN ('audio/ape','audio/x-ape')"
+            context.contentResolver.query(collection, projection, selection, null, null)?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+                val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+                val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val mimeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MIME_TYPE)
+                val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+
+                while (cursor.moveToNext()) {
+                    val rawData = cursor.getString(dataCol) ?: ""
+                    val data = resolveRealFilePath(rawData)
+                    if (data.isBlank() || data.lowercase() in knownPaths) continue
+                    knownPaths.add(data.lowercase())
+
+                    var title = cursor.getString(titleCol) ?: com.xiaowei.player.i18n.Strings.get("unknown_title")
+                    var artist = cursor.getString(artistCol) ?: ""
+                    var album = cursor.getString(albumCol) ?: ""
+                    var duration = cursor.getLong(durationCol)
+                    var track = 0
+                    var year = 0
+
+                    val apeTag = ApeMetadataParser.parse(File(data))
+                    if (apeTag != null) {
+                        apeTag.title?.let { title = it }
+                        apeTag.artist?.let { artist = it }
+                        apeTag.album?.let { album = it }
+                        if (duration <= 0L && apeTag.durationMs > 0L) duration = apeTag.durationMs
+                        if (apeTag.year > 0) year = apeTag.year
+                        if (apeTag.track > 0) track = apeTag.track
+                    }
+
+                    val lyrics = readLyrics(data, cursor.getString(mimeCol))
+                    val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
+                    val albumId = albumKey(album)
+
+                    result.add(
+                        Song(
+                            id = cursor.getLong(idCol),
+                            title = title,
+                            artist = artist,
+                            artistId = artistId,
+                            album = album,
+                            albumId = albumId,
+                            albumArtist = null,
+                            duration = duration,
+                            data = data,
+                            dateAdded = cursor.getLong(dateCol),
+                            track = track,
+                            year = year,
+                            lyrics = lyrics,
+                            mimeType = cursor.getString(mimeCol) ?: "audio/x-ape",
+                            size = cursor.getLong(sizeCol),
+                            source = "mediastore_files",
+                            quality = cachedQuality(data, duration)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to query APE files from MediaStore", e)
+        }
+        return result
+    }
+
     private fun readSongFromFile(file: File): Song? {
         val filePath = file.absolutePath
+        if (filePath.lowercase().endsWith(".ape")) {
+            return readApeSongFromFile(file)
+        }
         val mmr = MediaMetadataRetriever()
         try {
             mmr.setDataSource(filePath)
@@ -240,7 +372,7 @@ class MusicRepository(private val context: Context) {
             val track = if (trackRead > 0) trackRead else (wavTag?.track ?: 0)
 
             val id = filePath.hashCode().toLong() and 0xFFFFFFFFL
-            val albumId = "$artist|$album".hashCode().toLong() and 0xFFFFFFFFL
+            val albumId = albumKey(album)
             val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
 
             val lyrics = readLyrics(filePath, mimeTypeStr)
@@ -272,6 +404,49 @@ class MusicRepository(private val context: Context) {
             return null
         } finally {
             try { mmr.release() } catch (_: Exception) {}
+        }
+    }
+
+    private fun readApeSongFromFile(file: File): Song? {
+        val filePath = file.absolutePath
+        return try {
+            val apeTag = ApeMetadataParser.parse(file)
+            val title = apeTag?.title?.takeIf { it.isNotBlank() } ?: file.nameWithoutExtension
+            val artist = apeTag?.artist?.takeIf { it.isNotBlank() } ?: ""
+            val album = apeTag?.album?.takeIf { it.isNotBlank() } ?: ""
+            val albumArtist = apeTag?.albumArtist?.takeIf { it.isNotBlank() }
+            val duration = apeTag?.durationMs ?: 0L
+            val year = apeTag?.year ?: 0
+            val track = apeTag?.track ?: 0
+
+            val id = filePath.hashCode().toLong() and 0xFFFFFFFFL
+            val albumId = albumKey(album)
+            val artistId = artist.hashCode().toLong() and 0xFFFFFFFFL
+
+            val lyrics = readLyrics(filePath, "audio/x-ape")
+
+            Song(
+                id = id,
+                title = title,
+                artist = artist,
+                artistId = artistId,
+                album = album,
+                albumId = albumId,
+                albumArtist = albumArtist,
+                duration = duration,
+                data = filePath,
+                dateAdded = file.lastModified() / 1000,
+                track = track,
+                year = year,
+                lyrics = lyrics,
+                mimeType = "audio/x-ape",
+                size = file.length(),
+                source = "custom_path",
+                quality = AudioQualityParser.parseFile(file, duration)
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read APE metadata: $filePath - ${e.message}")
+            null
         }
     }
 
@@ -389,6 +564,8 @@ class MusicRepository(private val context: Context) {
                     readMp3Uslt(filePath)
                 mime?.contains("wav", ignoreCase = true) == true || lower.endsWith(".wav") ->
                     cachedWavTag(filePath)?.lyrics
+                lower.endsWith(".ape") ->
+                    ApeMetadataParser.parse(File(filePath))?.lyrics
                 else -> null
             }
         } catch (e: Exception) {
@@ -750,10 +927,15 @@ class MusicRepository(private val context: Context) {
         return songs.groupBy { it.albumId }
             .map { (albumId, list) ->
                 val first = list.first()
+                val albumArtist = list.firstNotNullOfOrNull {
+                    it.albumArtist?.takeIf { a -> a.isNotBlank() }
+                } ?: list.groupBy { it.displayArtist }
+                    .maxByOrNull { it.value.size }?.key
+                    ?: first.displayArtist
                 Album(
                     id = albumId,
                     name = first.album,
-                    artist = first.albumArtist ?: first.displayArtist,
+                    artist = albumArtist,
                     year = list.mapNotNull { if (it.year > 0) it.year else null }.maxOrNull() ?: 0,
                     songCount = list.size,
                     totalDuration = list.sumOf { it.duration },
@@ -808,9 +990,13 @@ class MusicRepository(private val context: Context) {
         private const val MAX_STRING_BYTES = 1024 * 1024
         private const val MAX_COMPRESSED_BYTES = 4 * 1024 * 1024
         private const val MAX_DECOMPRESSED_BYTES = 8 * 1024 * 1024
-        private const val CACHE_VERSION = 2
+        private const val CACHE_VERSION = 3
         private const val CACHE_FILE_NAME = ".music_scan_cache"
         private val COPY_SUFFIX_REGEX = Regex(""" \(\d+\)(\.[^.]+)?$""")
+
+        fun albumKey(album: String): Long {
+            return album.trim().lowercase().hashCode().toLong() and 0xFFFFFFFFL
+        }
 
         fun dedupeSongs(songs: List<Song>): List<Song> {
             if (songs.size < 2) return songs

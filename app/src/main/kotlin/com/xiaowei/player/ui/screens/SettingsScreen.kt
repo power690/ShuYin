@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Feedback
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
+import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
@@ -107,12 +108,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private enum class SettingIconTone {
+enum class SettingIconTone {
     PRIMARY, SECONDARY, TERTIARY, ERROR, NEUTRAL
 }
 
 @Composable
-private fun SettingIconTone.toneContainerColor(): Color = when (this) {
+fun SettingIconTone.toneContainerColor(): Color = when (this) {
     SettingIconTone.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
     SettingIconTone.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
     SettingIconTone.TERTIARY -> MaterialTheme.colorScheme.tertiaryContainer
@@ -121,7 +122,7 @@ private fun SettingIconTone.toneContainerColor(): Color = when (this) {
 }
 
 @Composable
-private fun SettingIconTone.toneContentColor(): Color = when (this) {
+fun SettingIconTone.toneContentColor(): Color = when (this) {
     SettingIconTone.PRIMARY -> MaterialTheme.colorScheme.onPrimaryContainer
     SettingIconTone.SECONDARY -> MaterialTheme.colorScheme.onSecondaryContainer
     SettingIconTone.TERTIARY -> MaterialTheme.colorScheme.onTertiaryContainer
@@ -167,7 +168,7 @@ private fun SettingsCategoryHeader(
 }
 
 @Composable
-private fun ExpressiveSettingItem(
+fun ExpressiveSettingItem(
     icon: ImageVector,
     tone: SettingIconTone,
     title: String,
@@ -319,22 +320,19 @@ private fun ThemeColorPickerItem(
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
-    onCustomPathConfirm: (String) -> Unit = {},
     onToggleMixWithOthers: (Boolean) -> Unit = {},
     onOpenMaterialSettings: () -> Unit = {},
     onOpenNavBarSettings: () -> Unit = {},
     onOpenPlayerStyle: () -> Unit = {},
     onOpenSponsor: () -> Unit = {},
-    onOpenWebDav: () -> Unit = {}
+    onOpenSourceSettings: () -> Unit = {},
+    onOpenOpenSourceLicense: () -> Unit = {}
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val themePrefs = remember { ThemePrefs.get(context) }
     val localePrefs = remember { LocalePrefs.get(context) }
     val darkModePrefs = remember { DarkModePrefs.get(context) }
-    val customPathPrefs = remember { CustomPathPrefs.get(context) }
     val audioMixPrefs = remember { AudioMixPrefs.get(context) }
-    val webDavPrefs = remember { WebDavPrefs.get(context) }
-    val webDavActive = webDavPrefs.activeIdState.value != null
 
     val dynamicColorEnabled = themePrefs.dynamicColorEnabledState.value
     val coverColorEnabled = themePrefs.coverColorEnabledState.value
@@ -345,50 +343,7 @@ fun SettingsScreen(
 
     var showDarkModePicker by remember { mutableStateOf(false) }
 
-    var showCustomPathDialog by remember { mutableStateOf(false) }
-
-    var customPathInput by remember { mutableStateOf("") }
-
     val dynamicColorSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-
-    fun hasManageStoragePermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        }
-    }
-
-    val storagePermissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-
-            showCustomPathDialog = true
-        }
-    }
-
-    val openDocumentTreeLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-
-            val realPath = uriToFilePath(uri, context)
-            if (realPath != null) {
-                customPathInput = realPath
-            } else {
-
-                Toast.makeText(
-                    context,
-                    Strings.get("system_not_supported"),
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-    }
 
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var backingUp by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -397,49 +352,6 @@ fun SettingsScreen(
         ActivityResultContracts.StartActivityForResult()
     ) {
         BackupManager.cleanupShareDir(context)
-    }
-
-    fun onNativeFilePickerClick() {
-        try {
-            openDocumentTreeLauncher.launch(null)
-        } catch (_: Exception) {
-
-            Toast.makeText(
-                context,
-                Strings.get("system_not_supported"),
-                Toast.LENGTH_SHORT
-            ).show()
-        }
-    }
-
-    fun onCustomPathClick() {
-        if (hasManageStoragePermission()) {
-
-            customPathInput = customPathPrefs.path
-            showCustomPathDialog = true
-        } else {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-
-                try {
-                    val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                        data = Uri.parse("package:${context.packageName}")
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
-                    context.startActivity(intent)
-                } catch (_: Exception) {
-
-                    try {
-                        val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        context.startActivity(intent)
-                    } catch (_: Exception) {}
-                }
-            } else {
-
-                storagePermissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-        }
     }
 
     val hazeState = rememberHazeState()
@@ -607,18 +519,10 @@ fun SettingsScreen(
             )
 
             ExpressiveSettingItem(
-                icon = Icons.Outlined.Folder,
+                icon = Icons.Outlined.LibraryMusic,
                 tone = SettingIconTone.TERTIARY,
-                title = Strings.get("settings_custom_path"),
-                itemEnabled = !webDavActive,
-                onClick = { if (!webDavActive) onCustomPathClick() }
-            )
-
-            ExpressiveSettingItem(
-                icon = Icons.Outlined.Cloud,
-                tone = SettingIconTone.SECONDARY,
-                title = Strings.get("settings_webdav"),
-                onClick = { onOpenWebDav() }
+                title = Strings.get("settings_source"),
+                onClick = onOpenSourceSettings
             )
 
             ExpressiveSettingItem(
@@ -765,6 +669,13 @@ fun SettingsScreen(
             )
 
             ExpressiveSettingItem(
+                icon = Icons.Outlined.Code,
+                tone = SettingIconTone.PRIMARY,
+                title = Strings.get("open_source_license"),
+                onClick = onOpenOpenSourceLicense
+            )
+
+            ExpressiveSettingItem(
                 icon = Icons.Outlined.Info,
                 tone = SettingIconTone.SECONDARY,
                 title = Strings.get("mine_version"),
@@ -801,155 +712,6 @@ fun SettingsScreen(
         )
     }
 
-    if (showCustomPathDialog) {
-        Dialog(
-            onDismissRequest = {
-                showCustomPathDialog = false
-                customPathInput = ""
-            },
-            properties = DialogProperties(
-                dismissOnBackPress = true,
-                dismissOnClickOutside = true,
-                usePlatformDefaultWidth = false
-            )
-        ) {
-            Surface(
-                modifier = Modifier
-                    .padding(horizontal = 36.dp)
-                    .widthIn(max = 420.dp)
-                    .fillMaxWidth(),
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                shadowElevation = 8.dp
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 20.dp)
-                ) {
-                    Text(
-                        text = Strings.get("custom_path_dialog_title"),
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(8.dp))
-
-                    Text(
-                        text = Strings.get("custom_path_desc"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = androidx.compose.ui.unit.TextUnit(20f, androidx.compose.ui.unit.TextUnitType.Sp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    OutlinedTextField(
-                        value = customPathInput,
-                        onValueChange = { customPathInput = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        placeholder = {
-                            Text(
-                                text = Strings.get("custom_path_input_hint"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(14.dp),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = androidx.compose.ui.unit.TextUnit(
-                                when {
-                                    customPathInput.length > 60 -> 11f
-                                    customPathInput.length > 40 -> 12f
-                                    customPathInput.length > 20 -> 13f
-                                    else -> 15f
-                                },
-                                androidx.compose.ui.unit.TextUnitType.Sp
-                            )
-                        ),
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                            focusedIndicatorColor = MaterialTheme.colorScheme.primary,
-                            unfocusedIndicatorColor = MaterialTheme.colorScheme.outlineVariant,
-                            cursorColor = MaterialTheme.colorScheme.primary
-                        )
-                    )
-
-                    Spacer(Modifier.height(12.dp))
-
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNativeFilePickerClick() },
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 14.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Outlined.Folder,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = Strings.get("custom_path_pick_native"),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        TextButton(
-                            onClick = {
-                                showCustomPathDialog = false
-                                customPathInput = ""
-                            }
-                        ) {
-                            Text(
-                                text = Strings.get("custom_path_cancel"),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = {
-                                val path = customPathInput.trim()
-                                customPathPrefs.path = path
-                                onCustomPathConfirm(path)
-                                showCustomPathDialog = false
-                                customPathInput = ""
-                            }
-                        ) {
-                            Text(
-                                text = Strings.get("custom_path_confirm"),
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 @Composable
@@ -980,52 +742,6 @@ private fun ColorBall(
                 tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
-        }
-    }
-}
-
-private fun uriToFilePath(uri: Uri, context: android.content.Context): String? {
-    val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
-    val split = docId.split(":", limit = 2)
-    if (split.size < 2) return null
-
-    val type = split[0]
-    val relativePath = split[1]
-    val decoded = try {
-        java.net.URLDecoder.decode(relativePath, "UTF-8")
-    } catch (_: Exception) {
-        relativePath
-    }
-
-    return when (type) {
-        "primary", "home" -> {
-            "${Environment.getExternalStorageDirectory().absolutePath}/$decoded"
-        }
-        else -> {
-            var baseDir: java.io.File? = null
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                try {
-                    val sm = context.getSystemService(android.content.Context.STORAGE_SERVICE) as android.os.storage.StorageManager
-                    for (vol in sm.storageVolumes) {
-                        if (vol.uuid == type) {
-                            baseDir = vol.directory
-                            break
-                        }
-                    }
-                } catch (_: Exception) {
-                }
-            }
-            if (baseDir == null) {
-                val fallback = java.io.File("/storage/$type")
-                if (fallback.isDirectory) {
-                    baseDir = fallback
-                }
-            }
-            if (baseDir != null && baseDir.isDirectory) {
-                java.io.File(baseDir, decoded).absolutePath
-            } else {
-                null
-            }
         }
     }
 }

@@ -9,6 +9,7 @@ import android.os.Build
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.CancellationException
 import com.xiaowei.player.LibraryState
 import com.xiaowei.player.data.Song
 import com.xiaowei.player.i18n.Strings
@@ -105,8 +107,18 @@ fun FavoriteScreen(
         selectedIds = emptySet()
     }
 
-    BackHandler(enabled = selectionMode) {
-        exitSelection()
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        PredictiveBackHandler(enabled = selectionMode) { progress ->
+            try {
+                progress.collect { }
+                exitSelection()
+            } catch (e: CancellationException) {
+            }
+        }
+    } else {
+        BackHandler(enabled = selectionMode) {
+            exitSelection()
+        }
     }
 
     val hazeState = rememberHazeState()
