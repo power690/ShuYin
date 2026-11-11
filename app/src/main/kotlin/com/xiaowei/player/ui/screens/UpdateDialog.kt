@@ -369,22 +369,34 @@ private fun cleanupInstalledApks(context: Context) {
 
 private fun toHex(bytes: ByteArray): String = bytes.joinToString("") { "%02X".format(it) }
 
-private fun computeChecksums(file: File): Map<String, String>? {
+private fun extractSigningCertificate(file: File): java.security.cert.X509Certificate? {
     return try {
+        java.util.zip.ZipFile(file).use { zip ->
+            val entry = zip.entries().asSequence().firstOrNull { e ->
+                !e.isDirectory && e.name.startsWith("META-INF/") &&
+                        (e.name.endsWith(".RSA") || e.name.endsWith(".DSA") || e.name.endsWith(".EC"))
+            } ?: return null
+            java.security.cert.CertificateFactory.getInstance("X.509")
+                .generateCertificates(zip.getInputStream(entry))
+                .firstOrNull() as? java.security.cert.X509Certificate
+        }
+    } catch (_: Exception) {
+        null
+    }
+}
+
+private fun computeChecksums(file: File): Map<String, String>? {
+    val cert = extractSigningCertificate(file) ?: return null
+    return try {
+        val der = cert.encoded
         val crc = CRC32()
         val md5 = MessageDigest.getInstance("MD5")
         val sha1 = MessageDigest.getInstance("SHA-1")
         val sha256 = MessageDigest.getInstance("SHA-256")
-        file.inputStream().use { input ->
-            val buf = ByteArray(64 * 1024)
-            var read: Int
-            while (input.read(buf).also { read = it } != -1) {
-                crc.update(buf, 0, read)
-                md5.update(buf, 0, read)
-                sha1.update(buf, 0, read)
-                sha256.update(buf, 0, read)
-            }
-        }
+        crc.update(der)
+        md5.update(der)
+        sha1.update(der)
+        sha256.update(der)
         mapOf(
             "crc32" to crc.value.toString(16).padStart(8, '0'),
             "md5" to toHex(md5.digest()),

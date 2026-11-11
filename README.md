@@ -91,7 +91,7 @@
 ## 📦 下载安装
 
 ### 方式一：直接下载 APK
-前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v3.3.0.apk`，直接安装即可。
+前往 [Release](../../releases) 页面下载最新的 `鼠音-release-v3.3.2.apk`，直接安装即可。
 
 ### 方式二：自行编译
 ```bash
@@ -199,7 +199,7 @@ python3 i18n_helper.py list                     # 列出所有 key
 
 ## 📊 项目状态
 
-- **当前版本**：v3.3.0
+- **当前版本**：v3.3.2
 - **最低支持**：Android 6.0 (API 23)
 - **目标版本**：Android 17 (API 37)
 
@@ -298,7 +298,7 @@ An open-source Android local music player built with Jetpack Compose, featuring 
 ## 📦 Download & Install
 
 ### Option 1: Download APK
-Go to the [Release](../../releases) page to download the latest `ShuYin-release-v3.3.0.apk` and install directly.
+Go to the [Release](../../releases) page to download the latest `ShuYin-release-v3.3.2.apk` and install directly.
 
 ### Option 2: Build from Source
 ```bash
@@ -405,7 +405,7 @@ For bugs or feature suggestions, please go to the [Issues](../../issues) page an
 
 ## 📊 Project Status
 
-- **Current Version**: v3.3.0
+- **Current Version**: v3.3.2
 - **Min Support**: Android 6.0 (API 23)
 - **Target Version**: Android 17 (API 37)
 ```

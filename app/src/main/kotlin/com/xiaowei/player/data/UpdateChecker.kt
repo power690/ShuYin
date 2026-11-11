@@ -13,10 +13,10 @@ object UpdateChecker {
     private const val UPDATE_URL_CN = "https://gitee.com/cuteqwwtr/ShuYin/raw/main/update_cn.json"
     private const val UPDATE_URL_INTL = "https://raw.githubusercontent.com/power690/ShuYin/main/update.json"
 
-    const val EXPECTED_CRC32 = "C83410D7"
-    const val EXPECTED_MD5 = "7EDE882F1DD318E0A31A1F69379F9285"
-    const val EXPECTED_SHA1 = "B3B9CDCABA0BDEA9B84C81E59A19063B6B0A9CF0"
-    const val EXPECTED_SHA256 = "2B3F166C24A97D504FA8C22568AF8DE9F315A02D1889EE06760EA6C03E84A426"
+    const val EXPECTED_CRC32 = "D7987BBE"
+    const val EXPECTED_MD5 = "A8E7A71D7B777F4C8F0DB3412C9BB88B"
+    const val EXPECTED_SHA1 = "6D7229BD1382AD1E358364471C8B2D8514EA75E0"
+    const val EXPECTED_SHA256 = "304592EA89B4E81A07C66CE7F2E90C3DE9EEC25141222F41F6E0353F8AE0FDD1"
 
     private fun updateUrl(): String {
         val lang = Strings.currentLanguageCode()
