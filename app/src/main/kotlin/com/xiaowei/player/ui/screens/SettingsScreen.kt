@@ -56,6 +56,7 @@ import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.SettingsBackupRestore
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.VolunteerActivism
 import androidx.compose.material.icons.outlined.Wallpaper
@@ -333,6 +334,7 @@ fun SettingsScreen(
     val localePrefs = remember { LocalePrefs.get(context) }
     val darkModePrefs = remember { DarkModePrefs.get(context) }
     val audioMixPrefs = remember { AudioMixPrefs.get(context) }
+    val predictiveBackPrefs = remember { com.xiaowei.player.data.PredictiveBackPrefs.get(context) }
 
     val dynamicColorEnabled = themePrefs.dynamicColorEnabledState.value
     val coverColorEnabled = themePrefs.coverColorEnabledState.value
@@ -575,6 +577,19 @@ fun SettingsScreen(
                     }
                 }
             )
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ExpressiveSettingItem(
+                    icon = Icons.Outlined.SwapHoriz,
+                    tone = SettingIconTone.PRIMARY,
+                    title = Strings.get("settings_predictive_back"),
+                    subtitle = Strings.get("settings_predictive_back_desc"),
+                    checked = predictiveBackPrefs.enabledState.value,
+                    onCheckedChange = { newValue ->
+                        predictiveBackPrefs.enabled = newValue
+                    }
+                )
+            }
 
             ExpressiveSettingItem(
                 icon = Icons.Outlined.VolumeUp,

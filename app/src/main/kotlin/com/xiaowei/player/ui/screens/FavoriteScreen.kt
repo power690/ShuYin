@@ -107,7 +107,9 @@ fun FavoriteScreen(
         selectedIds = emptySet()
     }
 
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        com.xiaowei.player.data.PredictiveBackPrefs.get(context).enabled
+    ) {
         PredictiveBackHandler(enabled = selectionMode) { progress ->
             try {
                 progress.collect { }

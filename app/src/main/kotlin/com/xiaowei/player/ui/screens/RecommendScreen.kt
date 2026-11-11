@@ -745,10 +745,10 @@ fun SearchScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val results = remember(searchedQuery, library.songs) {
+    val results = remember(searchedQuery, library.activeSongs) {
         val q = searchedQuery.trim()
         if (q.isEmpty()) emptyList()
-        else library.songs.filter {
+        else library.activeSongs.filter {
             it.title.contains(q, true) ||
             it.artist.contains(q, true) ||
             it.album.contains(q, true)

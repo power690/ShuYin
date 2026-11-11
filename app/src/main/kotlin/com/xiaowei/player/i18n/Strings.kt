@@ -10272,6 +10272,12 @@ object Strings {
             "ms" to "Tiada lagu rangkaian",
             "tl" to "Walang network na kanta",
         ),
+        "settings_predictive_back" to mapOf(
+            "zh" to "预测性返回",
+        ),
+        "settings_predictive_back_desc" to mapOf(
+            "zh" to "仅部分系统支持",
+        ),
     )
 
     private val ALL_STRINGS: Map<String, Map<String, String>> = buildStringsPart1() + buildStringsPart2() + buildStringsPart3() + buildStringsPart4() + buildStringsPart5() + buildStringsPart6() + buildStringsPart7() + buildStringsPart8() + buildStringsPart9() + buildStringsPart10()

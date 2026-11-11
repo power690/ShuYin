@@ -409,7 +409,8 @@ fun ShuYinApp(
     }
 
     val predictiveBackSupported =
-        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU
+        android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                com.xiaowei.player.data.PredictiveBackPrefs.get(context).enabled
 
     if (predictiveBackSupported) {
         PredictiveBackHandler(enabled = playerExpanded) { progress ->

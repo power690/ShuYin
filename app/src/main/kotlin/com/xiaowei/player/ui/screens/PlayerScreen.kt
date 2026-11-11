@@ -735,7 +735,9 @@ fun PlayerScreen(
         }
 
         if (showPlaylist) {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                com.xiaowei.player.data.PredictiveBackPrefs.get(context).enabled
+            ) {
                 PredictiveBackHandler { progress ->
                     try {
                         progress.collect { }
